@@ -1,0 +1,265 @@
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #666;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+}
+
+.input {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 220px;
+}
+
+/* Buttons */
+.btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #eee;
+  color:black;
+}
+
+.btn.primary {
+  background: #4f46e5;
+  color: white;
+  border: none;
+}
+
+.btn.primary:hover {
+  background: #4338ca;
+}
+
+.btn.success {
+  background: #15803d;
+  border: none;
+}
+
+.btn.success:hover {
+  background: #15803d;
+}
+
+/* Main layout */
+.main {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.map-section,
+.sidebar {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Map */
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.map-placeholder {
+  height: 280px;
+  border: 2px dashed #ddd;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Station Cards */
+.station-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.station-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.station-card,
+.station-item {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  
+}
+.station-card {
+  background: #ffffff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 6px 18px rgba(16, 24, 16, 0.04);
+}
+.station-name {
+  font-weight: 600;
+}
+
+.station-info {
+  font-size: 12px;
+  color: #555;
+  margin-top: 2px;
+}
+
+.station-right {
+  text-align: right;
+}
+
+.station-slots {
+  font-weight: 600;
+}
+
+.station-price {
+  font-size: 13px;
+  color: #444;
+}
+
+/* Sidebar */
+.station-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.filters h4 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  width: 400px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.slot-btn {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.slot-btn.selected {
+  border: 2px solid #4f46e5;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Footer */
+.footer {
+  margin-top: 30px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}
+
+.muted {
+  color: #777;
+}
+
+.small {
+  font-size: 12px;
+}
+.map-container {
+    height: 300px;
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
+.advanced-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(180deg, #4f46e5, #4338ca);
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+}

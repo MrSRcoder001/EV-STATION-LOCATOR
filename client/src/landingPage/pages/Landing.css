@@ -1,0 +1,248 @@
+/* client/src/styles/landing.css
+   Enhanced: cleaner spacing, smoother animations, improved typograhy,
+   better card shadows, hover states and mobile polish.
+   Plain CSS (no :root variables). */
+
+/* --------------------
+   Base / Typography
+   -------------------- */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #f7fbf7 0%, #f6fbf6 100%);
+  color: #13220f;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+/* subtle page entrance */
+.page-fade-in {
+  animation: fadeInUp 420ms ease forwards;
+  opacity: 0;
+}
+@keyframes fadeInUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+/* --------------------
+   Layout container
+   -------------------- */
+.container-wide {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+
+/* --------------------
+   Hero section
+   -------------------- */
+.hero {
+  display: flex;
+  gap: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 0 48px;
+  margin: 0 auto;
+  width: 100%;
+}
+.hero-left { flex: 1; max-width: 680px; }
+.hero-right { width: 420px; display: flex; justify-content: center; }
+
+/* badge */
+.top-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: linear-gradient(90deg, rgba(47,158,68,0.12), rgba(246,201,76,0.06));
+  color: #2f9e44;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 14px;
+  letter-spacing: 0.2px;
+}
+
+/* title & subtitle */
+.title {
+  font-size: 44px;
+  margin: 0 0 14px;
+  color: #0f2b18;
+  line-height: 1.03;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+.subtitle {
+  margin: 0 0 22px;
+  color: #4f6655;
+  font-size: 17px;
+  max-width: 52ch;
+}
+
+/* CTA row with split buttons */
+.cta-row { display:flex; gap:12px; align-items:center; margin-bottom:18px; }
+.btn {
+  border: none;
+  padding: 12px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform .14s ease, box-shadow .18s ease, opacity .12s;
+  box-shadow: 0 6px 18px rgba(34,92,40,0.06);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.btn:active { transform: translateY(1px); }
+.btn.primary {
+  background: linear-gradient(90deg,#2f9e44,#1f7b2f);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(47,158,68,0.10);
+}
+.btn.primary:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(47,158,68,0.12); }
+.btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(47,158,68,0.09);
+  color: #2f9e44;
+  padding: 10px 14px;
+}
+
+/* small secondary CTA inside phone mock */
+.btn.small {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* stats row */
+.trust-row { display:flex; gap:18px; margin-top:10px; align-items:center; }
+.stat { display:flex; flex-direction:column; align-items:flex-start; }
+.stat-value { font-weight:800; font-size:18px; color:#2f9e44; }
+.stat-label { font-size:13px; color:#5f6f63; }
+
+/* message box */
+.message {
+  margin-top:14px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(47,158,68,0.06), rgba(246,201,76,0.04));
+  border-radius: 12px;
+  color: #234b2b;
+  font-weight:600;
+  max-width: 480px;
+  box-shadow: 0 6px 18px rgba(33,74,34,0.03);
+}
+
+/* --------------------
+   Phone mock (hero-right)
+   -------------------- */
+.phone-mock {
+  width: 340px;
+  border-radius: 22px;
+  background: linear-gradient(180deg,#ffffff 0%, #f7fbf7 100%);
+  padding: 14px;
+  box-shadow: 0 18px 50px rgba(46,75,55,0.08);
+  border: 1px solid rgba(50,120,70,0.04);
+  transform: translateY(0);
+  transition: transform .28s cubic-bezier(.2,.9,.2,1), box-shadow .28s;
+}
+.phone-mock:hover { transform: translateY(-6px); box-shadow: 0 26px 70px rgba(46,75,55,0.10); }
+
+.phone-topbar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding-bottom:8px; margin-bottom:8px; border-bottom:1px solid rgba(14,26,14,0.03);
+}
+.logo { display:flex; align-items:center; gap:10px; font-weight:700; color:#f6c94c; }
+.logo svg { display:block; transform: translateY(-2px); }
+
+/* map preview styling */
+.map-preview { padding:10px 6px; display:flex; justify-content:center; align-items:center; }
+.map-svg { width:100%; height:190px; border-radius:12px; overflow:hidden; display:block; }
+
+/* little animated markers (SVG circle pulse handled in keyframes below) */
+.marker { transform-origin:center; }
+.pulse circle { animation: pulse 1700ms ease-out infinite; }
+.pulse.delay1 circle { animation-delay: 300ms; }
+.pulse.delay2 circle { animation-delay: 650ms; }
+@keyframes pulse {
+  0% { transform: scale(1); opacity:1; }
+  50% { transform: scale(1.35); opacity:0.6; }
+  100% { transform: scale(1.7); opacity:0; }
+}
+
+/* phone footer area */
+.phone-footer { display:flex; align-items:center; justify-content:center; margin-top:12px; gap:8px; }
+
+/* --------------------
+   Features section
+   -------------------- */
+.features {
+  max-width:1100px;
+  margin: 36px auto 20px;
+  padding: 18px 24px 48px;
+  text-align:center;
+}
+.features h2 { margin:0 0 18px; font-size:26px; color:#153019; }
+.feature-grid {
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:20px;
+  margin-top:18px;
+  align-items:stretch;
+}
+.feature-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), #fbfffb);
+  border-radius: 14px;
+  padding:22px;
+  box-shadow: 0 12px 30px rgba(31,123,47,0.04);
+  border: 1px solid rgba(47,158,68,0.04);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.feature-card:hover { transform: translateY(-8px); box-shadow: 0 28px 80px rgba(31,123,47,0.08); }
+.feature-icon {
+  width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+  font-size:20px; margin-bottom:12px; background: linear-gradient(90deg,#f6c94c, rgba(246,201,76,0.55));
+  box-shadow: 0 8px 20px rgba(246,201,76,0.06);
+}
+
+/* card content */
+.feature-card h3 { margin:0 0 8px; font-size:18px; color:#163a26; }
+.feature-card p { margin:0; color:#4b5f4d; font-size:14px; line-height:1.5; }
+
+/* --------------------
+   Footer
+   -------------------- */
+.lp-footer {
+  display:flex; justify-content:space-between; align-items:center;
+  max-width:1100px; margin:40px auto 60px; padding:18px 24px; color:#5f6f63; font-size:14px; border-top:1px solid rgba(20,30,20,0.03);
+}
+.lp-footer a { color:#5f6f63; margin-left:14px; text-decoration:none; }
+
+/* --------------------
+   Responsive adjustments
+   -------------------- */
+@media (max-width: 980px) {
+  .hero { flex-direction: column-reverse; gap: 18px; padding:32px 0 26px; }
+  .hero-left { text-align:center; max-width:unset; }
+  .hero-right { width:100%; display:flex; justify-content:center; }
+  .feature-grid { grid-template-columns: repeat(2, 1fr); }
+  .cta-row { justify-content:center; }
+  .message { margin-left:auto; margin-right:auto; }
+}
+@media (max-width: 540px) {
+  .title { font-size:28px; }
+  .map-svg { height:150px; }
+  .feature-grid { grid-template-columns: 1fr; gap:12px; }
+  .phone-mock { width:100%; padding:12px; border-radius:16px; }
+  .hero { padding:20px 0; }
+}
+
+/* --------------------
+   Small accessibility & helpers
+   -------------------- */
+.visually-hidden { position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }

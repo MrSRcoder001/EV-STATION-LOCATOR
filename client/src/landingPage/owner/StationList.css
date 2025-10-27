@@ -1,0 +1,134 @@
+/* Reset container to use body scroll */
+
+
+.station-container {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 0 15px;
+}
+
+.station-title {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.loading-text,
+.empty-text {
+    color: #7f8c8d;
+    text-align: center;
+    margin-top: 50px;
+    font-size: 1.1rem;
+}
+
+.add-link {
+    color: #f1c40f;
+    /* yellow link */
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.add-link:hover {
+    text-decoration: underline;
+}
+
+.station-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.station-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+    padding: 18px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.station-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.station-info {
+    flex: 1;
+}
+
+.station-name {
+    font-size: 1rem;
+    font-weight: 600;
+
+    color: #34495e;
+    margin-bottom: 5px;
+    text-transform: capitalize;
+}
+
+.station-address {
+    font-size: 0.95rem;
+    color: #7f8c8d;
+    margin-bottom: 4px;
+}
+
+.station-coords {
+    font-size: 0.85rem;
+    color: #95a5a6;
+}
+
+.station-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background 0.2s, transform 0.2s;
+}
+
+/* Yellow edit button */
+.edit-btn {
+    background-color: #f1c40f;
+    /* yellow */
+    color: #2c3e50;
+}
+
+.edit-btn:hover {
+    background-color: #d4ac0d;
+    /* darker yellow */
+    transform: scale(1.05);
+}
+
+/* Red delete button */
+.delete-btn {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.delete-btn:hover {
+    background-color: #c0392b;
+    transform: scale(1.05);
+}
+
+/* Responsive for mobile */
+@media (max-width: 600px) {
+    .station-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .station-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}

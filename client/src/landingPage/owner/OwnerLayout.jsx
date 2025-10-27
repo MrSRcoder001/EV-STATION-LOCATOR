@@ -1,7 +1,8 @@
 import React from "react";
 import { Link, Outlet } from "react-router-dom";
 import "./owner.css";
-
+import OwnerBookings from "./OwnerBookings";
+import StationList from "./StationList"
 export default function OwnerLayout() {
   return (
     <div className="app-container">
@@ -13,7 +14,7 @@ export default function OwnerLayout() {
           </div>
 
           <nav className="side-nav">
-            <Link to="/owner/stations" className="active">
+            <Link to="/owner/dashboard" className="active">
               Stations
             </Link>
             <Link to="/owner/stations/new">➕ Add Station</Link>
@@ -26,6 +27,11 @@ export default function OwnerLayout() {
         <main className="content">
           <Outlet />
         </main>
+        <div className="two">
+          <>
+            <StationList />
+          </>
+        </div>
       </div>
     </div>
   );

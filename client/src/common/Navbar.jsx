@@ -91,7 +91,6 @@ const AppNavbar = () => {
               {/* 👇 Only owner role */}
               {userRole === "owner" && (
                 <>
-                 
                   <li>
                     <Link
                       to="/owner/dashboard"
@@ -102,8 +101,8 @@ const AppNavbar = () => {
                   </li>
                   <li>
                     <Link
-                      to="/station/add"
-                      className={isActive("/station/add") ? "active" : ""}
+                      to="/owner/stations/new"
+                      className={isActive("/owner/stations/new") ? "active" : ""}
                     >
                       Add Station
                     </Link>
@@ -113,10 +112,19 @@ const AppNavbar = () => {
 
               {/* 👇 Logout for all logged in users */}
               <li>
-            <Link to="/home" className={isActive("/home") ? "active" : ""}>
-              Search Station
-            </Link>
-          </li>
+                <Link to="/home" className={isActive("/home") ? "active" : ""}>
+                  Search Station
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/profile"
+                  className={location.pathname === "/profile" ? "active" : ""}
+                >
+                  Booking History
+                </Link>
+              </li>
+
               <li>
                 <button onClick={handleLogout} className="btn-logout">
                   Logout

@@ -1,15 +1,13 @@
-// client/src/pages/owner/StationForm.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../api";
 import { useNavigate, useParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "../owner/owner.css";
 import fixLeafletIcons from "../../utils/leafletIconFix";
+import "./owner.css";
+
 fixLeafletIcons();
 
-// small marker component to allow clicking to set coords
 function ClickMarker({ position, onChange }) {
   useMapEvents({
     click(e) {
@@ -28,10 +26,17 @@ export default function StationForm() {
     name: "",
     address: "",
     phone: "",
+    email: "",
+    type: "Public",
+    pricePerKwh: "",
+    openTime: "06:00",
+    closeTime: "22:00",
     lat: 18.5204,
     lng: 73.8567,
-    chargers: [],
+    chargers: [{ type: "Fast", count: 1 }],
+    amenities: [],
   });
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -45,9 +50,15 @@ export default function StationForm() {
             name: s.name || "",
             address: s.address || "",
             phone: s.phone || "",
+            email: s.email || "",
+            type: s.type || "Public",
+            pricePerKwh: s.pricePerKwh || "",
+            openTime: s.openTime || "06:00",
+            closeTime: s.closeTime || "22:00",
             lat: s.location?.coordinates?.[1] || 18.5204,
             lng: s.location?.coordinates?.[0] || 73.8567,
-            chargers: s.chargers || [],
+            chargers: s.chargers || [{ type: "Fast", count: 1 }],
+            amenities: s.amenities || [],
           });
         } catch (err) {
           alert("Failed to load station");
@@ -66,39 +77,15 @@ export default function StationForm() {
   function setCoords([lat, lng]) {
     setForm((prev) => ({ ...prev, lat, lng }));
   }
-  // example function inside StationForm component
-  async function handleImageUpload(file) {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append("image", file);
-    const res = await API.post(`/owner/stations/${id}/upload`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    // update local station state or images list
-    setForm((prev) => ({
-      ...prev,
-      images: [...(prev.images || []), res.data.imageUrl],
-    }));
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (
-      !form.name ||
-      !Number.isFinite(Number(form.lat)) ||
-      !Number.isFinite(Number(form.lng))
-    ) {
-      return alert("Name and valid coordinates required");
-    }
     try {
       setLoading(true);
       const payload = {
-        name: form.name,
-        address: form.address,
-        phone: form.phone,
+        ...form,
         lat: Number(form.lat),
         lng: Number(form.lng),
-        chargers: form.chargers,
       };
       if (editMode) {
         await API.put(`/owner/stations/${id}`, payload);
@@ -115,6 +102,8 @@ export default function StationForm() {
     }
   }
 
+  const amenitiesList = ["Parking", "Restroom", "Food Court", "WiFi", "Shop"];
+
   return (
     <div className="container">
       <h2 style={{ textAlign: "center" }}>
@@ -130,36 +119,82 @@ export default function StationForm() {
         <label>Address</label>
         <input name="address" value={form.address} onChange={onChange} />
 
+        <label>Email</label>
+        <input
+          name="email"
+          value={form.email}
+          onChange={onChange}
+          type="email"
+        />
+
+        <label>Phone</label>
+        <input name="phone" value={form.phone} onChange={onChange} />
+
+        <label>Station Type</label>
+        <select name="type" value={form.type} onChange={onChange}>
+          <option value="Public">Public</option>
+          <option value="Private">Private</option>
+        </select>
+
+        <label>Price per kWh (₹)</label>
+        <input
+          type="number"
+          name="pricePerKwh"
+          value={form.pricePerKwh}
+          onChange={onChange}
+        />
+
+        <label>Operating Hours</label>
         <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <label>Phone</label>
-            <input name="phone" value={form.phone} onChange={onChange} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label>Coordinates (lat, lng)</label>
-            <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="time"
+            name="openTime"
+            value={form.openTime}
+            onChange={onChange}
+          />
+          <input
+            type="time"
+            name="closeTime"
+            value={form.closeTime}
+            onChange={onChange}
+          />
+        </div>
+
+        <label>Amenities</label>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {amenitiesList.map((am) => (
+            <label key={am}>
               <input
-                name="lat"
-                value={form.lat}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, lat: e.target.value }))
-                }
+                type="checkbox"
+                checked={form.amenities.includes(am)}
+                onChange={(e) => {
+                  const newAmenities = e.target.checked
+                    ? [...form.amenities, am]
+                    : form.amenities.filter((a) => a !== am);
+                  setForm((prev) => ({ ...prev, amenities: newAmenities }));
+                }}
               />
-              <input
-                name="lng"
-                value={form.lng}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, lng: e.target.value }))
-                }
-              />
-              <label>Upload Images</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e.target.files[0])}
-              />
-            </div>
-          </div>
+              {am}
+            </label>
+          ))}
+        </div>
+
+        <label>Coordinates (lat, lng)</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            name="lat"
+            value={form.lat}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, lat: e.target.value }))
+            }
+          />
+          <input
+            name="lng"
+            value={form.lng}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, lng: e.target.value }))
+            }
+          />
         </div>
 
         <div
@@ -178,24 +213,12 @@ export default function StationForm() {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             <ClickMarker
               position={[form.lat, form.lng]}
-              onChange={([lat, lng]) => setCoords([lat, lng])}
+              onChange={(coords) => setCoords(coords)}
             />
-            {/* show marker at the coords */}
-            <Marker position={[form.lat, form.lng]} />
           </MapContainer>
-          <small style={{ display: "block", padding: 8, color: "#556c5a" }}>
-            Tip: Click on map to set coordinates
-          </small>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            margin: "auto",
-            paddingBottom: "10px",
-          }}
-        >
+        <div style={{ display: "flex", gap: 12, margin: "auto" }}>
           <button className="btn" disabled={loading}>
             {loading ? "Saving..." : "Save"}
           </button>

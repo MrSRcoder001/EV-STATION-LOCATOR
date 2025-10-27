@@ -1,7 +1,7 @@
-// client/src/pages/owner/StationList.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../api";
 import { Link } from "react-router-dom";
+import "./StationList.css"; // Import the CSS
 
 export default function StationList() {
   const [stations, setStations] = useState([]);
@@ -27,6 +27,7 @@ export default function StationList() {
     if (!window.confirm("Delete this station?")) return;
     try {
       await API.delete(`/owner/stations/${id}`);
+      alert("Station deleted successfully");
       setStations(stations.filter((s) => s._id !== id));
     } catch (err) {
       alert("Delete failed");
@@ -34,61 +35,48 @@ export default function StationList() {
   }
 
   return (
-    <div className="container">
-      <div>
-        <h2>Your Stations</h2>
-        {loading ? (
-          <p>Loading...</p>
-        ) : stations.length === 0 ? (
-          <p>
-            No stations yet — <Link to="/owner/stations/new">Add one</Link>
-          </p>
-        ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {stations.map((s) => (
-              <div
-                key={s._id}
-                style={{
-                  background: "#fff",
-                  padding: 12,
-                  borderRadius: 10,
-                  boxShadow: "0 6px 18px rgba(0,0,0,0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{s.name}</div>
-                    <div style={{ fontSize: 13, color: "#5b6b5b" }}>
-                      {s.address}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#6b7a6d" }}>
-                      Coords: {s.location?.coordinates?.[1]},{" "}
-                      {s.location?.coordinates?.[0]}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Link to={`/owner/stations/${s._id}/edit`} className="btn">
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(s._id)}
-                      className="btn btn-ghost"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
+    <div className="station-container">
+      <h2 className="station-title">Your Stations</h2>
+
+      {loading ? (
+        <p className="loading-text">Loading...</p>
+      ) : stations.length === 0 ? (
+        <p className="empty-text">
+          No stations yet —{" "}
+          <Link className="add-link" to="/owner/stations/new">
+            Add one
+          </Link>
+        </p>
+      ) : (
+        <div className="station-list">
+          {stations.map((s) => (
+            <div key={s._id} className="station-card">
+              <div className="station-info">
+                <h3 className="station-name">{s.name}</h3>
+                <p className="station-address">{s.address}</p>
+                <p className="station-coords">
+                  Coords: {s.location?.coordinates?.[1]},{" "}
+                  {s.location?.coordinates?.[0]}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <div className="station-actions">
+                <Link
+                  to={`/owner/stations/${s._id}/edit`}
+                  className="btn edit-btn"
+                >
+                  Edit
+                </Link>
+                <button
+                  onClick={() => handleDelete(s._id)}
+                  className="btn delete-btn"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,102 @@
+/* Profile.css */
+.profile-page {
+    padding: 20px;
+}
+
+.profile-header {
+    margin-bottom: 16px;
+}
+
+.bookings-section {
+    background: #fff;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(45, 62, 54, 0.06);
+}
+
+.booking-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.booking-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #eef6ea;
+    background: #fbfffaf0;
+}
+
+.booking-left {
+    max-width: 70%;
+}
+
+.station-name {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.station-address {
+    font-size: 13px;
+    color: #556a5f;
+    margin-top: 4px;
+}
+
+.slot-time {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #40513f;
+}
+
+.booking-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.badge.pending {
+    background: #fff4db;
+    color: #7a5a00;
+    border: 1px solid #ffe6a8;
+}
+
+.badge.accepted {
+    background: #e9f8ee;
+    color: #1f7b2f;
+    border: 1px solid #c8f1d0;
+}
+
+.badge.rejected {
+    background: #ffecec;
+    color: #9a1f1f;
+    border: 1px solid #ffbcbc;
+}
+
+.badge.completed {
+    background: #eaf7ff;
+    color: #064b6f;
+    border: 1px solid #cfeeff;
+}
+
+.badge.cancelled {
+    background: #f3f3f3;
+    color: #666;
+    border: 1px solid #e0e0e0;
+}
+
+.booking-meta {
+    font-size: 13px;
+    color: #556a5f;
+}

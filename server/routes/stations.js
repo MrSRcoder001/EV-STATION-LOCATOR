@@ -12,13 +12,26 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
+function validateLatLng(lat, lng) {
+  const la = Number(lat);
+  const lo = Number(lng);
+  return (
+    Number.isFinite(la) &&
+    Number.isFinite(lo) &&
+    la >= -90 &&
+    la <= 90 &&
+    lo >= -180 &&
+    lo <= 180
+  );
+}
+
 /**
  * GET /api/stations/nearby?lat=&lng=&maxDistance=5000
  * Returns nearby stations from DB (owner stations). Adds availableSlots count (free future slots).
  */
 router.get('/nearby', async (req, res) => {
   try {
-    const { lat, lng, maxDistance = 5000 } = req.query;
+    const { lat, lng, maxDistance = 10000 } = req.query;
     if (lat === undefined || lng === undefined) return res.status(400).json({ message: 'lat & lng required' });
 
     const latitude = Number(lat);
@@ -38,8 +51,8 @@ router.get('/nearby', async (req, res) => {
         }
       }
     })
-    .limit(100)
-    .lean();
+      .limit(100)
+      .lean();
 
     // compute availableSlots for each station (count of free future slots)
     const now = new Date();
@@ -85,21 +98,22 @@ router.post(
       const ownerId = req.user.id;
       const {
         name,
-        address = '',
+        address,
         phone = '',
         lng,
         lat,
         chargers = [],
-        city, state, pincode,
         pricePerKwh,
-        slotDurationMinutes,
-        openingHour, closingHour,
+        openTime,
+        closeTime,
         amenities,
-        status,
-        website,
         email,
         images
       } = req.body;
+
+      if (!validateLatLng(lat, lng)) {
+        return res.status(400).json({ message: 'Invalid latitude or longitude range' });
+      }
 
       // lat/lng must be numbers
       const latN = Number(lat);
@@ -112,39 +126,81 @@ router.post(
       let cleanChargers = [];
       if (Array.isArray(chargers) && chargers.length > 0) {
         cleanChargers = chargers.map(c => ({
-          type: c && c.type === 'DC' ? 'DC' : (c && c.type ? c.type : 'AC'),
-          powerKw: c && c.powerKw !== undefined ? Number(c.powerKw) : undefined,
-          chargerCount: c && c.chargerCount !== undefined ? Number(c.chargerCount) : 1,
-          pricePerKwh: c && c.pricePerKwh !== undefined ? Number(c.pricePerKwh) : undefined
+          type: c.type || 'Normal',
+          count: Number(c.count) || 1
         }));
       } else {
-        // default single AC charger if none provided
-        cleanChargers = [{ type: 'AC', powerKw: undefined, chargerCount: 1 }];
+        // default single charger if none provided
+        cleanChargers = [{ type: 'Normal', count: 1 }];
       }
 
-      const safeAmenities = Array.isArray(amenities) ? amenities.map(String) : [];
-      const safeImages = Array.isArray(images) ? images.map(String) : [];
+      const safeAmenities = Array.isArray(amenities) ? amenities : [];
+      const safeImages = Array.isArray(images) ? images : [];
 
       const station = await Station.create({
         ownerId,
         name: String(name).trim(),
-        address: String(address || ''),
+        address: {
+          city: address?.city || '',
+          pincode: address?.pincode || '',
+          village: address?.village || '',
+          area: address?.area || '',
+          fullAddress: address?.fullAddress || '',
+        },
         phone: String(phone || ''),
-        city: city || '',
-        state: state || '',
-        pincode: pincode || '',
-        email: email || '',
-        website: website || '',
+        email: String(email || ''),
+        type: req.body.type || 'Public',
         pricePerKwh: pricePerKwh !== undefined ? Number(pricePerKwh) : 0,
-        slotDurationMinutes: slotDurationMinutes ? Number(slotDurationMinutes) : 30,
-        openingHour: openingHour || '08:00',
-        closingHour: closingHour || '22:00',
+        openTime: openTime || '06:00',
+        closeTime: closeTime || '22:00',
         amenities: safeAmenities,
         chargers: cleanChargers,
-        status: status || 'draft',
         images: safeImages,
         location: { type: 'Point', coordinates: [lngN, latN] }
       });
+
+      // Automatically generate slots for the next 7 days
+      try {
+        const stationId = station._id;
+        const now = new Date();
+        const daysAhead = 7;
+        const slotMinutes = 60; // default 1 hour slots
+        const startHour = 6;
+        const endHour = 22;
+
+        const createdSlots = [];
+        for (let day = 0; day < daysAhead; day++) {
+          for (let h = startHour; h < endHour; h++) {
+            // simple hourly slots
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, h, 0, 0);
+            if (start < now) continue;
+            const end = new Date(start.getTime() + slotMinutes * 60000);
+
+            for (let chargerIndex = 0; chargerIndex < cleanChargers.length; chargerIndex++) {
+              const charger = cleanChargers[chargerIndex];
+              // use .count from our standardized cleanChargers
+              const count = charger.count || 1;
+              for (let copy = 0; copy < count; copy++) {
+                createdSlots.push({
+                  stationId,
+                  chargerIndex,
+                  chargerType: charger.type || 'Normal',
+                  start,
+                  end
+                });
+              }
+            }
+          }
+        }
+        const chunkSize = 1000;
+        for (let i = 0; i < createdSlots.length; i += chunkSize) {
+          await Slot.insertMany(createdSlots.slice(i, i + chunkSize));
+        }
+        console.log(`Generated ${createdSlots.length} slots for new station ${stationId}`);
+      } catch (slotErr) {
+        console.error('Auto slot generation failed', slotErr);
+        // don't fail the request, just log
+      }
 
       res.status(201).json(station);
     } catch (err) {
@@ -191,6 +247,7 @@ router.get('/:id', auth, owner, async (req, res) => {
  * PUT /api/owner/stations/:id
  * update station (owner or admin)
  */
+
 router.put('/:id', auth, owner, async (req, res) => {
   try {
     const station = await Station.findById(req.params.id);
@@ -200,40 +257,39 @@ router.put('/:id', auth, owner, async (req, res) => {
     }
 
     const {
-      name, address, phone, lng, lat, chargers, status,
-      city, state, pincode, pricePerKwh, slotDurationMinutes, openingHour, closingHour,
-      amenities, email, website, images
+      name, address, phone, lng, lat, chargers,
+      pricePerKwh, openTime, closeTime,
+      amenities, email, images
     } = req.body;
 
     if (name !== undefined) station.name = name;
-    if (address !== undefined) station.address = address;
+    if (address !== undefined) {
+      station.address = {
+        city: address.city || station.address?.city || '',
+        pincode: address.pincode || station.address?.pincode || '',
+        village: address.village || station.address?.village || '',
+        area: address.area || station.address?.area || '',
+        fullAddress: address.fullAddress || station.address?.fullAddress || '',
+      };
+    }
     if (phone !== undefined) station.phone = phone;
-    if (city !== undefined) station.city = city;
-    if (state !== undefined) station.state = state;
-    if (pincode !== undefined) station.pincode = pincode;
     if (email !== undefined) station.email = email;
-    if (website !== undefined) station.website = website;
     if (pricePerKwh !== undefined) station.pricePerKwh = Number(pricePerKwh);
-    if (slotDurationMinutes !== undefined) station.slotDurationMinutes = Number(slotDurationMinutes);
-    if (openingHour !== undefined) station.openingHour = openingHour;
-    if (closingHour !== undefined) station.closingHour = closingHour;
-    if (amenities !== undefined) station.amenities = Array.isArray(amenities) ? amenities.map(String) : station.amenities;
-    if (images !== undefined) station.images = Array.isArray(images) ? images.map(String) : station.images;
-    if (status !== undefined) station.status = status;
+    if (openTime !== undefined) station.openTime = openTime;
+    if (closeTime !== undefined) station.closeTime = closeTime;
+    if (amenities !== undefined) station.amenities = Array.isArray(amenities) ? amenities : station.amenities;
+    if (images !== undefined) station.images = Array.isArray(images) ? images : station.images;
     if (lng !== undefined && lat !== undefined) {
-      const lngN = Number(lng);
-      const latN = Number(lat);
-      if (!Number.isFinite(lngN) || !Number.isFinite(latN)) {
-        return res.status(400).json({ message: 'Invalid lat/lng' });
+      if (!validateLatLng(lat, lng)) {
+        return res.status(400).json({ message: 'Invalid lat/lng range' });
       }
-      station.location.coordinates = [lngN, latN];
+      station.location.coordinates = [Number(lng), Number(lat)];
     }
     if (chargers !== undefined) {
       station.chargers = Array.isArray(chargers) ? chargers.map(c => ({
-        type: c && c.type === 'DC' ? 'DC' : (c && c.type ? c.type : 'AC'),
-        powerKw: c && c.powerKw !== undefined ? Number(c.powerKw) : undefined,
-        chargerCount: c && c.chargerCount !== undefined ? Number(c.chargerCount) : 1,
-        pricePerKwh: c && c.pricePerKwh !== undefined ? Number(c.pricePerKwh) : undefined
+        type: c.type || 'Normal',
+        // Frontend might send count OR chargerCount
+        count: Number(c.count || c.chargerCount) || 1
       })) : station.chargers;
     }
 
@@ -346,7 +402,7 @@ router.post(
 
 router.post('/:id/slots', auth, owner, async (req, res) => {
 
-  
+
   try {
     const stationId = req.params.id;
     const station = await Station.findById(stationId);
@@ -355,7 +411,7 @@ router.post('/:id/slots', auth, owner, async (req, res) => {
 
     const { slotMinutes = 30, startHour = 8, endHour = 22, daysAhead = 7, regenerate = false } = req.body;
 
-    if (![15,30,60].includes(Number(slotMinutes))) return res.status(400).json({ message: 'slotMinutes must be 15,30 or 60' });
+    if (![15, 30, 60].includes(Number(slotMinutes))) return res.status(400).json({ message: 'slotMinutes must be 15,30 or 60' });
     if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 24 || endHour <= startHour) return res.status(400).json({ message: 'Invalid hours' });
 
     // delete existing future slots if regenerate true
@@ -366,18 +422,31 @@ router.post('/:id/slots', auth, owner, async (req, res) => {
 
     // generate slots
     const created = [];
-    const chargersArray = Array.isArray(station.chargers) && station.chargers.length > 0 ? station.chargers : [{ chargerCount: 1, type: 'AC' }];
+    const chargersArray = Array.isArray(station.chargers) && station.chargers.length > 0 ? station.chargers : [{ count: 1, type: 'AC' }];
+
+    // Normalize date to start of days
+    const baseDate = new Date(now);
+    baseDate.setHours(0, 0, 0, 0);
+
     for (let day = 0; day < daysAhead; day++) {
+      // Loop hours
+      // If today, we might want to skip past hours, but simple logic: 
+      // construct date, check if > now.
+
       for (let h = startHour; h < endHour; h++) {
         for (let m = 0; m < 60; m += slotMinutes) {
-          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, h, m, 0);
-          if (start < now) continue;
+          const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + day, h, m, 0);
+
+          if (start < now) continue; // skip past times
+
           const end = new Date(start.getTime() + slotMinutes * 60000);
 
           for (let chargerIndex = 0; chargerIndex < chargersArray.length; chargerIndex++) {
-            const charger = chargersArray[chargerIndex] || { chargerCount: 1, type: 'AC' };
-            const chargerCount = charger.chargerCount || 1;
-            for (let copy = 0; copy < chargerCount; copy++) {
+            const charger = chargersArray[chargerIndex];
+            // Fix: use .count instead of .chargerCount, handle both for safety
+            const count = charger.count || charger.chargerCount || 1;
+
+            for (let copy = 0; copy < count; copy++) {
               created.push({
                 stationId,
                 chargerIndex,
@@ -402,6 +471,93 @@ router.post('/:id/slots', auth, owner, async (req, res) => {
   } catch (err) {
     console.error('Slot gen error', err && err.stack ? err.stack : err);
     res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * GET /api/stations/:id/owner-slots?from=&to=&onlyFree=true&limit=500
+ * returns slots for ALL stations belonging to the owner of the specified station
+ */
+router.get('/:id/owner-slots', async (req, res) => {
+  try {
+    const stationId = req.params.id;
+    const from = req.query.from ? new Date(req.query.from) : new Date();
+    const to = req.query.to ? new Date(req.query.to) : new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+    const onlyFree = req.query.onlyFree !== 'false';
+    const limit = Number(req.query.limit) || 500;
+
+    const sourceStation = await Station.findById(stationId).lean();
+    if (!sourceStation) return res.status(404).json({ message: 'Owner reference point not found' });
+
+    const ownerId = sourceStation.ownerId;
+    const allStations = await Station.find({ ownerId }).select('_id name').lean();
+    const stationIds = allStations.map(s => s._id);
+
+    const filter = {
+      stationId: { $in: stationIds },
+      start: { $gte: from, $lt: to }
+    };
+    if (onlyFree) filter.isBooked = false;
+
+    // fetch slots and populate station name if possible (or handle in frontend)
+    const slots = await Slot.find(filter).sort({ start: 1 }).limit(limit).lean();
+
+    // Map station names for UX convenience
+    const stationMap = {};
+    allStations.forEach(s => stationMap[String(s._id)] = s.name);
+
+    const enrichedSlots = slots.map(sl => ({
+      ...sl,
+      stationName: stationMap[String(sl.stationId)] || 'Nearby Station'
+    }));
+
+    res.json(enrichedSlots);
+  } catch (err) {
+    console.error('owner-slots error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/stations/search?q=...
+ * Database-wide search by station name or address (fullAddress).
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ message: 'Search query required' });
+
+    const regex = new RegExp(q, 'i');
+
+    // Search by name or fullAddress
+    const stations = await Station.find({
+      $or: [
+        { name: regex },
+        { 'address.fullAddress': regex },
+        { 'address.city': regex },
+        { 'address.area': regex }
+      ]
+    }).limit(20).lean();
+
+    // compute availableSlots for each station
+    const now = new Date();
+    const result = await Promise.all(stations.map(async (s) => {
+      try {
+        const freeCount = await Slot.countDocuments({
+          stationId: s._id,
+          isBooked: false,
+          start: { $gte: now }
+        });
+        return { ...s, availableSlots: freeCount };
+      } catch (e) {
+        return { ...s, availableSlots: 0 };
+      }
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error('search error', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

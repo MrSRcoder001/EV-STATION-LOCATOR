@@ -1,6 +1,7 @@
-// client/src/components/owner/SlotScheduler.jsx
+// client/src/landingPage/owner/SlotScheduler.jsx
 import React, { useState } from "react";
 import API from "../../api";
+import toast from 'react-hot-toast';
 
 export default function SlotScheduler({ stationId }) {
   const [slotMinutes, setSlotMinutes] = useState(30);
@@ -21,77 +22,85 @@ export default function SlotScheduler({ stationId }) {
         daysAhead,
         regenerate,
       });
-      alert(`Done: ${res.data.total} slots queued/generated`);
+      toast.success(`Time slots generated: ${res.data.total} slots created`);
     } catch (err) {
-      alert(err?.response?.data?.message || "Failed to generate slots");
+      toast.error("Failed to generate slots");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div
-      style={{
-        border: "1px solid #e6efe6",
-        padding: 12,
-        borderRadius: 8,
-        background: "#fbfefb",
-      }}
-    >
-      <h3>Slot Scheduler</h3>
-      <form onSubmit={generate} style={{ display: "grid", gap: 8 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <label>Slot (minutes)</label>
-          <select
-            value={slotMinutes}
-            onChange={(e) => setSlotMinutes(Number(e.target.value))}
-          >
-            <option value={15}>15</option>
-            <option value={30}>30</option>
-            <option value={60}>60</option>
-          </select>
-          <label>Start hour</label>
-          <input
-            type="number"
-            value={startHour}
-            onChange={(e) => setStartHour(Number(e.target.value))}
-            min={0}
-            max={23}
-          />
-          <label>End hour</label>
-          <input
-            type="number"
-            value={endHour}
-            onChange={(e) => setEndHour(Number(e.target.value))}
-            min={1}
-            max={24}
-          />
+    <div className="glass-panel p-6 border-primary/10">
+      <div className="mb-6 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span>
+        <h3 className="font-black text-sm uppercase tracking-widest italic">Availability Scheduler</h3>
+      </div>
+      <form onSubmit={generate} className="space-y-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-1">
+            <label className="text-[9px] text-white/30 font-black uppercase tracking-widest block ml-1">Interval (m)</label>
+            <select
+              value={slotMinutes}
+              onChange={(e) => setSlotMinutes(Number(e.target.value))}
+              className="glass-input w-full p-2 text-xs appearance-none"
+            >
+              <option value={15}>15</option>
+              <option value={30}>30</option>
+              <option value={60}>60</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] text-white/30 font-black uppercase tracking-widest block ml-1">START HOUR</label>
+            <input
+              type="number"
+              value={startHour}
+              onChange={(e) => setStartHour(Number(e.target.value))}
+              className="glass-input w-full p-2 text-xs"
+              min={0}
+              max={23}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] text-white/30 font-black uppercase tracking-widest block ml-1">END HOUR</label>
+            <input
+              type="number"
+              value={endHour}
+              onChange={(e) => setEndHour(Number(e.target.value))}
+              className="glass-input w-full p-2 text-xs"
+              min={1}
+              max={24}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[9px] text-white/30 font-black uppercase tracking-widest block ml-1">Horizon (d)</label>
+            <input
+              type="number"
+              value={daysAhead}
+              onChange={(e) => setDaysAhead(Number(e.target.value))}
+              className="glass-input w-full p-2 text-xs"
+              min={1}
+              max={30}
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <label>Days ahead</label>
+        <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
           <input
-            type="number"
-            value={daysAhead}
-            onChange={(e) => setDaysAhead(Number(e.target.value))}
-            min={1}
-            max={30}
+            type="checkbox"
+            checked={regenerate}
+            id="regen"
+            onChange={(e) => setRegenerate(e.target.checked)}
+            className="w-4 h-4 rounded border-white/10 bg-white/5 accent-primary"
           />
-          <label>
-            <input
-              type="checkbox"
-              checked={regenerate}
-              onChange={(e) => setRegenerate(e.target.checked)}
-            />{" "}
-            Regenerate (delete future slots)
+          <label htmlFor="regen" className="text-[10px] font-bold text-white/50 cursor-pointer select-none">
+            Overwrite Existing Slots: This will replace all future available slots
           </label>
         </div>
 
-        <div>
-          <button className="btn" disabled={loading}>
-            {loading ? "Generating..." : "Generate Slots"}
-          </button>
-        </div>
+        <button className="glass-btn-primary w-full py-3 text-[10px] font-black tracking-widest uppercase disabled:grayscale" disabled={loading}>
+          {loading ? "Generating..." : "Generate Time Slots"}
+        </button>
       </form>
     </div>
   );

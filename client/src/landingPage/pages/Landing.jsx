@@ -1,15 +1,13 @@
-// client/src/pages/LandingPage.jsx
 import React, { useState } from "react";
-import "./Landing.css";
+import toast from 'react-hot-toast';
 
 export default function LandingPage() {
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState("");
 
   async function handleLocate() {
-    setMessage("");
     if (!navigator.geolocation) {
-      setMessage("Geolocation not supported by your browser.");
+      toast.error("Geolocation not supported by your browser.");
       return;
     }
     setLocating(true);
@@ -18,222 +16,141 @@ export default function LandingPage() {
         setLocating(false);
         const lat = pos.coords.latitude.toFixed(5);
         const lng = pos.coords.longitude.toFixed(5);
-        setMessage(`Found you — ${lat}, ${lng}. Showing nearby stations...`);
-        // TODO: navigate to map page or call API
-        // e.g., navigate(`/map?lat=${lat}&lng=${lng}`)
+        toast.success(`Found your location! Lat: ${lat}, Lng: ${lng}`);
       },
       (err) => {
         setLocating(false);
-        setMessage(
-          "Unable to detect location. Please enable location services."
-        );
+        toast.error("Unable to detect location. Please enable location services.");
       },
       { timeout: 10000 }
     );
   }
 
   return (
-    <div className="container">
-    <div className="landing-root">
-      <header className="hero">
-        <div className="hero-left">
-          <div className="top-badge">New • Beta</div>
-          <h1 className="title">
-            Find EV Charging Stations — fast, local, simple.
+    <div className="min-h-screen pt-20">
+      {/* Background blobs for depth */}
+      <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+      </div>
+
+      <header className="container mx-auto px-6 py-12 lg:py-24 flex flex-col lg:flex-row items-center gap-12">
+        <div className="flex-1 text-center lg:text-left">
+          <div className="inline-block px-4 py-1.5 mb-6 text-xs font-bold tracking-wider uppercase bg-primary/20 text-primary-light border border-primary/30 rounded-full">
+            New • Premium Experience
+          </div>
+          <h1 className="text-4xl lg:text-7xl font-extrabold leading-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-primary-light">
+            Find EV Charging Stations <br />
+            <span className="text-glow-primary">Fast & Simple.</span>
           </h1>
-          <p className="subtitle">
-            EV Station Finder helps you locate nearby chargers, compare charger
-            types and reserve a slot — all from one elegant app.
+          <p className="text-lg lg:text-xl text-white/70 mb-10 max-w-2xl">
+            The ultimate EV station finder. Locate nearby chargers, compare speeds,
+            and reserve your slot in seconds—all within our sleek, glass-morphic interface.
           </p>
 
-          <div className="cta-row">
-            <button className="btn primary" onClick={handleLocate}>
+          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-12">
+            <button
+              className="glass-btn-primary w-full sm:w-auto"
+              onClick={handleLocate}
+            >
               {locating ? "Locating..." : "Find Stations Near Me"}
             </button>
             <button
-              className="btn ghost"
+              className="glass-btn w-full sm:w-auto"
               onClick={() => {
-                // smooth-scroll to features
-                document
-                  .querySelector(".features")
-                  ?.scrollIntoView({ behavior: "smooth" });
+                document.querySelector("#features")?.scrollIntoView({ behavior: "smooth" });
               }}
             >
-              Explore features
+              Explore Features
             </button>
           </div>
 
-          <div className="trust-row">
-            <div className="stat">
-              <div className="stat-value">1.2k+</div>
-              <div className="stat-label">Stations</div>
+          <div className="grid grid-cols-3 gap-8 pt-8 border-t border-white/10 max-w-lg mx-auto lg:mx-0">
+            <div>
+              <div className="text-2xl lg:text-3xl font-bold">1.2k+</div>
+              <div className="text-xs lg:text-sm text-white/50 uppercase tracking-wider">Stations</div>
             </div>
-            <div className="stat">
-              <div className="stat-value">98%</div>
-              <div className="stat-label">Happy users</div>
+            <div>
+              <div className="text-2xl lg:text-3xl font-bold">98%</div>
+              <div className="text-xs lg:text-sm text-white/50 uppercase tracking-wider">Satisfaction</div>
             </div>
-            <div className="stat">
-              <div className="stat-value">24/7</div>
-              <div className="stat-label">Support</div>
+            <div>
+              <div className="text-2xl lg:text-3xl font-bold">24/7</div>
+              <div className="text-xs lg:text-sm text-white/50 uppercase tracking-wider">Support</div>
             </div>
           </div>
-
-          {message && <div className="message">{message}</div>}
         </div>
 
-        <div className="hero-right">
-          <div className="phone-mock">
-            <div className="phone-topbar">
-              <div className="logo">
-                <svg
-                  width="34"
-                  height="34"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden
-                >
-                  <defs />
-                  <path
-                    d="M3 13v4a2 2 0 0 0 2 2h2"
-                    stroke="#255B2F"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                  <path
-                    d="M21 13v4a2 2 0 0 1-2 2h-2"
-                    stroke="#255B2F"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                  <path
-                    d="M6 10c1.4-2 3.8-3 6-3s4.6 1 6 3"
-                    stroke="#255B2F"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                  <path
-                    d="M12 5v2"
-                    stroke="#F0C330"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <strong>EV Finder</strong>
+        <div className="flex-1 w-full max-w-2xl animate-float">
+          <div className="glass-panel p-1 aspect-[4/3] relative group">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-2xl -z-10 group-hover:scale-105 transition-transform duration-500"></div>
+
+            <div className="w-full h-full bg-slate-900/50 rounded-xl overflow-hidden flex flex-col">
+              <div className="flex items-center gap-2 p-3 border-b border-white/10 bg-white/5">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                </div>
+                <div className="flex-1 flex justify-center">
+                  <div className="px-3 py-1 glass-card text-[10px] text-white/40 border-none">ev-locator.app</div>
+                </div>
               </div>
-            </div>
 
-            <div className="map-preview">
-              {/* stylized map with animated markers */}
-              <svg
-                className="map-svg"
-                viewBox="0 0 400 300"
-                preserveAspectRatio="xMidYMid meet"
-                aria-hidden
-              >
-                <rect
-                  x="0"
-                  y="0"
-                  width="400"
-                  height="300"
-                  rx="12"
-                  fill="#eef7ec"
-                />
-                {/* roads */}
-                <path
-                  d="M10 200 Q80 150 140 170 T310 150"
-                  stroke="#dfeee2"
-                  strokeWidth="16"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M40 40 Q140 60 220 40 T380 60"
-                  stroke="#e9f6e9"
-                  strokeWidth="12"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-                {/* stations: markers */}
-                <g className="marker-group">
-                  <g transform="translate(120,120)" className="marker pulse">
-                    <circle cx="0" cy="0" r="12" fill="#F6C94C" opacity="1" />
-                    <path d="M-6 -2 L0 -10 L6 -2 L2 8 L-2 8 Z" fill="#2f9e44" />
-                  </g>
-                  <g
-                    transform="translate(240,80)"
-                    className="marker pulse delay1"
-                  >
-                    <circle cx="0" cy="0" r="12" fill="#F6C94C" />
-                    <path d="M-6 -2 L0 -10 L6 -2 L2 8 L-2 8 Z" fill="#2f9e44" />
-                  </g>
-                  <g
-                    transform="translate(290,200)"
-                    className="marker pulse delay2"
-                  >
-                    <circle cx="0" cy="0" r="12" fill="#F6C94C" />
-                    <path d="M-6 -2 L0 -10 L6 -2 L2 8 L-2 8 Z" fill="#2f9e44" />
-                  </g>
-                </g>
-                {/* user dot */}
-                <circle cx="50" cy="210" r="6" fill="#2f9e44" />
-              </svg>
-            </div>
+              <div className="flex-1 relative">
+                {/* Simplified Mock Map */}
+                <svg viewBox="0 0 400 300" className="w-full h-full opacity-40">
+                  <rect width="400" height="300" fill="#0f172a" />
+                  <path d="M0 100 Q100 80 200 120 T400 100" stroke="#1e293b" strokeWidth="20" fill="none" />
+                  <path d="M100 0 Q120 150 80 300" stroke="#1e293b" strokeWidth="20" fill="none" />
+                  <circle cx="200" cy="150" r="100" fill="none" stroke="#22c55e" strokeWidth="1" strokeDasharray="10 5" className="animate-pulse" />
+                </svg>
 
-            <div className="phone-footer">
-              <div className="mini-cta">
-                <button className="btn small" onClick={handleLocate}>
-                  {locating ? "Locating..." : "Locate me"}
-                </button>
-                <span className="version">v0.9 • Beta</span>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  <div className="relative">
+                    <div className="absolute -inset-4 bg-primary/30 blur-xl rounded-full"></div>
+                    <div className="w-6 h-6 bg-primary rounded-full border-4 border-white shadow-lg relative z-10 animate-bounce"></div>
+                  </div>
+                </div>
+
+                {/* Floating Info Cards */}
+                <div className="absolute top-10 right-10 glass-panel p-3 border-primary/40 animate-float" style={{ animationDelay: '1s' }}>
+                  <div className="text-primary text-[10px] font-bold">STATION READY</div>
+                  <div className="text-xs">Pune Central Hub</div>
+                </div>
+
+                <div className="absolute bottom-10 left-10 glass-panel p-3 border-secondary/40 animate-float" style={{ animationDelay: '2s' }}>
+                  <div className="text-secondary text-[10px] font-bold">2 SLOTS FREE</div>
+                  <div className="text-xs">DCP Fast Charger</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <section className="features" aria-label="Features">
-        <h2>Powerful features designed for EV drivers</h2>
-        <div className="feature-grid">
-          <div className="feature-card">
-            <div className="feature-icon">⚡</div>
-            <h3>Real-time availability</h3>
-            <p>
-              See which chargers are free right now and reserve a slot
-              instantly.
-            </p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">📍</div>
-            <h3>Accurate nearby search</h3>
-            <p>
-              Find stations near your current location with distance & travel
-              time.
-            </p>
-          </div>
-          <div className="feature-card">
-            <div className="feature-icon">💳</div>
-            <h3>Easy payments</h3>
-            <p>
-              Secure in-app payments and quick checkout (Stripe support coming).
-            </p>
-          </div>
+      <section id="features" className="container mx-auto px-6 py-24 border-t border-white/5">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl lg:text-5xl font-bold mb-4">Smart Charging Features</h2>
+          <p className="text-white/50">Everything you need for a seamless charging experience</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            { icon: "⚡", title: "Real-time Booking", desc: "Instantly check charger occupancy and secure your slot ahead of time." },
+            { icon: "📍", title: "Smart Routing", desc: "Get optimized paths to the nearest available station from your current spot." },
+            { icon: "💳", title: "Seamless Payments", desc: "Fast and secure transactions with our premium integrated wallet system." }
+          ].map((feature, idx) => (
+            <div key={idx} className="glass-card p-8 group">
+              <div className="text-4xl mb-6 bg-white/5 w-16 h-16 flex items-center justify-center rounded-2xl group-hover:bg-primary/20 transition-colors duration-300">
+                {feature.icon}
+              </div>
+              <h3 className="text-xl font-bold mb-4">{feature.title}</h3>
+              <p className="text-white/50 leading-relaxed">{feature.desc}</p>
+            </div>
+          ))}
         </div>
       </section>
-
-      <footer className="lp-footer">
-        <div>© {new Date().getFullYear()} EV Station Finder</div>
-        <div className="footer-links">
-          <a href="#privacy">Privacy</a>
-          <a href="#terms">Terms</a>
-          <a href="#contact">Contact</a>
-        </div>
-      </footer>
-    </div></div>
+    </div>
   );
 }

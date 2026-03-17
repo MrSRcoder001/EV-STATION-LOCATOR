@@ -19,7 +19,6 @@ app.use(express.json());
 app.use('/api/owner/stations', ownerStationsRoutes);
 app.use('/api/stations', ownerStationsRoutes);
 app.use('/api/auth', authRoutes);
-// app.use('/api/owner/bookings', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/owner/bookings', require('./routes/owner/bookings'));
 

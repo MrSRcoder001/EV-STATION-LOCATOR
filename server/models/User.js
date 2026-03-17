@@ -1,51 +1,64 @@
 const mongoose = require('mongoose');
 
-const StationLocationSchema = new mongoose.Schema({
-  type: {
-    type: String,
-    enum: ['Point'],
-    default: 'Point'
-  },
-  coordinates: {
-    // [lng, lat]
-    type: [Number],
-    validate: {
-      validator: function(v) {
-        return Array.isArray(v) && v.length === 2;
-      },
-      message: props => `${props.value} must be [lng, lat]`
-    }
-  }
-}, { _id: false });
-
 const UserSchema = new mongoose.Schema({
-  name: { type: String, default: '' },
-  email: { type: String, unique: true, required: true },
-  passwordHash: { type: String, required: true },
-  phone: { type: String, default: '' },
-  role: { type: String, enum: ['user', 'owner', 'admin'], default: 'user' },
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
 
-  // Station info (only for owners)
-  stationName: { 
-    type: String, 
-    required: function() { return this.role === 'owner'; },
+  email: {
+    type: String,
+    unique: true,
+    required: true,
+    lowercase: true,
+    trim: true
+  },
+
+  passwordHash: {
+    type: String,
+    required: true
+  },
+
+  phone: {
+    type: String,
     default: ''
   },
-  stationAddress: { 
-    type: String, 
-    required: function() { return this.role === 'owner'; },
+
+  alternatePhone: {
+    type: String,
     default: ''
+  },
+
+  profileImage: {
+    type: String,
+    default: ''
+  },
+
+  role: {
+    type: String,
+    enum: ['user', 'owner', 'admin'],
+    default: 'user'
+  },
+
+  // For owners: initial station details (optional, can create more later)
+  stationName: { type: String },
+  stationAddress: {
+    city: { type: String },
+    pincode: { type: String },
+    village: { type: String },
+    area: { type: String },
+    fullAddress: { type: String },
   },
   stationLocation: {
-    type: StationLocationSchema,
-    required: function() { return this.role === 'owner'; },
-    default: null
+    type: { type: String, enum: ['Point'] },
+    coordinates: { type: [Number], default: undefined } // [lng, lat]
   },
 
-  createdAt: { type: Date, default: Date.now }
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
-
-// Add geospatial index only if querying location
-UserSchema.index({ 'stationLocation': '2dsphere' });
 
 module.exports = mongoose.model('User', UserSchema);

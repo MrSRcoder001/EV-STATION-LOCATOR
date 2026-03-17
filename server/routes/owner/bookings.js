@@ -28,7 +28,7 @@ router.get('/', auth, ownerMiddleware, async (req, res) => {
     // populate minimal user & station info
     const bookings = await Booking.find({ ownerId })
       .sort({ createdAt: -1 })
-      .populate('userId', 'name email')
+      .populate('userId', 'name email phone')
       .populate('slotId', 'start end chargerType')
       .populate('stationId', 'name address')
       .lean();

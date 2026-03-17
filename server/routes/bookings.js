@@ -43,6 +43,14 @@ router.post('/', auth, async (req, res) => {
   // helper to test ObjectId-like
   const isObjectId = (v) => typeof v === 'string' && mongoose.Types.ObjectId.isValid(v);
 
+  // Validate dates if provided
+  if (start && isNaN(new Date(start).getTime())) {
+    return res.status(400).json({ message: 'Invalid start date format' });
+  }
+  if (end && isNaN(new Date(end).getTime())) {
+    return res.status(400).json({ message: 'Invalid end date format' });
+  }
+
   try {
     // CASE 1: slotId provided and looks like an ObjectId -> reserve existing slot
     if (slotId && isObjectId(slotId)) {
@@ -213,22 +221,13 @@ router.get('/owner', auth, async (req, res) => {
   try {
     const ownerId = req.user.id;
 
-    // Try to find bookings linked to stations owned by this user.
-    // We populate station so we can check station.ownerId (works even if Booking schema doesn't have ownerId)
-    const allBookings = await Booking.find().populate('station').lean();
+    // Optimized query: Booking model has ownerId field
+    const ownerBookings = await Booking.find({ ownerId: ownerId })
+      .populate('station')
+      .populate('userId', 'name email phone') // useful user info
+      .populate('slotId')
+      .sort({ createdAt: -1 });
 
-    // Filter bookings where booking.station.ownerId === ownerId
-    const ownerBookings = allBookings.filter((b) => {
-      if (!b) return false;
-      // booking may have station populated or store stationId as station
-      const station = b.station || b.stationId || null;
-      // station could be an ObjectId or object; handle both
-      const stationOwnerId =
-        station && station.ownerId ? String(station.ownerId) : null;
-      return stationOwnerId && String(stationOwnerId) === String(ownerId);
-    });
-
-    // Optionally map/format output for frontend
     return res.json(ownerBookings);
   } catch (err) {
     console.error('GET /api/bookings/owner error', err);

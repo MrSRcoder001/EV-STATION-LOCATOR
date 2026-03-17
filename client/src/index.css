@@ -1,3 +1,110 @@
-*{
-  background-color: #E6FEED;
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #22c55e;
+  --color-primary-light: #4ade80;
+  --color-primary-dark: #16a34a;
+  --color-secondary: #eab308;
+
+  --color-glass: rgba(255, 255, 255, 0.05);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+
+  --backdrop-blur-xs: 2px;
+  --backdrop-blur-2xl: 40px;
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-[#0f2027] text-white font-sans antialiased min-h-screen overflow-x-hidden;
+    background: radial-gradient(circle at top right, #1a2a6c, #203a43, #0f2027);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl;
+  }
+
+  .glass-morphism {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 shadow-xl;
+  }
+
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply bg-white/10 -translate-y-1 shadow-primary/20 shadow-lg;
+  }
+
+  .glass-btn {
+    @apply bg-white/10 border border-white/20 backdrop-blur-md px-6 py-2.5 rounded-lg font-semibold transition-all duration-300 hover:bg-white/20 hover:shadow-lg hover:shadow-white/10 active:scale-95;
+  }
+
+  .glass-btn-primary {
+    @apply bg-primary/20 border border-primary/30 text-primary-light backdrop-blur-md px-6 py-2.5 rounded-lg font-semibold transition-all duration-300 hover:bg-primary/30 hover:shadow-lg hover:shadow-primary/20 active:scale-95 text-primary-light;
+  }
+
+  .glass-input {
+    @apply bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white outline-none focus:border-primary/50 focus:bg-white/10 transition-all duration-300;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+
+  .text-glow-primary {
+    text-shadow: 0 0 15px rgba(34, 197, 94, 0.5);
+  }
+
+  /* Leaflet Dark Mode Tiles */
+  .map-tiles {
+    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%) opacity(0.7);
+  }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+  }
+}
+
+@keyframes pulse-slow {
+
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 8s ease-in-out infinite;
 }

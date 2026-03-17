@@ -32,7 +32,10 @@ async function seed() {
     for (const loc of locations) {
       const station = await Station.create({
         name: loc.name,
-        address: 'Sample address, Pune',
+        address: {
+          city: 'Pune',
+          fullAddress: 'Sample address'
+        },
         location: { type: 'Point', coordinates: loc.coords },
         chargers: [
           { type: 'AC', powerKw: 7.4, slots: generateSlotsForDays(8, 22, 30, 3) },

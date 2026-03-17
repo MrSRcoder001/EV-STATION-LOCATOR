@@ -1,20 +1,20 @@
+// client/src/landingPage/owner/StationForm.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../api";
 import { useNavigate, useParams } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import fixLeafletIcons from "../../utils/leafletIconFix";
-import "./owner.css";
+import toast from 'react-hot-toast';
 
 fixLeafletIcons();
 
-function ClickMarker({ position, onChange }) {
-  useMapEvents({
-    click(e) {
-      onChange([e.latlng.lat, e.latlng.lng]);
-    },
-  });
-  return position ? <Marker position={[position[0], position[1]]} /> : null;
+function RecenterMap({ lat, lng }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([lat, lng]);
+  }, [lat, lng, map]);
+  return null;
 }
 
 export default function StationForm() {
@@ -24,7 +24,13 @@ export default function StationForm() {
 
   const [form, setForm] = useState({
     name: "",
-    address: "",
+    address: {
+      city: "",
+      pincode: "",
+      village: "",
+      area: "",
+      fullAddress: "",
+    },
     phone: "",
     email: "",
     type: "Public",
@@ -33,7 +39,7 @@ export default function StationForm() {
     closeTime: "22:00",
     lat: 18.5204,
     lng: 73.8567,
-    chargers: [{ type: "Fast", count: 1 }],
+    chargers: [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }],
     amenities: [],
   });
 
@@ -48,7 +54,13 @@ export default function StationForm() {
           const s = res.data;
           setForm({
             name: s.name || "",
-            address: s.address || "",
+            address: {
+              city: s.address?.city || "",
+              pincode: s.address?.pincode || "",
+              village: s.address?.village || "",
+              area: s.address?.area || "",
+              fullAddress: s.address?.fullAddress || "",
+            },
             phone: s.phone || "",
             email: s.email || "",
             type: s.type || "Public",
@@ -57,25 +69,90 @@ export default function StationForm() {
             closeTime: s.closeTime || "22:00",
             lat: s.location?.coordinates?.[1] || 18.5204,
             lng: s.location?.coordinates?.[0] || 73.8567,
-            chargers: s.chargers || [{ type: "Fast", count: 1 }],
+            chargers: s.chargers?.length ? s.chargers.map(c => ({
+              type: c.type || "AC",
+              powerKw: c.powerKw ?? "",
+              chargerCount: c.chargerCount ?? 1,
+              pricePerKwh: c.pricePerKwh ?? ""
+            })) : [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }],
             amenities: s.amenities || [],
           });
         } catch (err) {
-          alert("Failed to load station");
+          toast.error("Failed to load station");
           navigate("/owner/stations");
         } finally {
           setLoading(false);
         }
       })();
     }
-  }, [id]);
+  }, [id, editMode, navigate]);
 
   function onChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
-  function setCoords([lat, lng]) {
-    setForm((prev) => ({ ...prev, lat, lng }));
+  function onAddressChange(e) {
+    setForm((prev) => ({
+      ...prev,
+      address: { ...prev.address, [e.target.name]: e.target.value }
+    }));
+  }
+
+  async function geocodeAddress() {
+    const { city, pincode, village, area, fullAddress } = form.address;
+    const query = [fullAddress, area, village, city, pincode].filter(Boolean).join(', ');
+    if (!query.trim()) {
+      toast.error("Please fill address fields");
+      return;
+    }
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=IN&limit=1`);
+      const data = await response.json();
+      if (data.length > 0) {
+        const { lat, lon } = data[0];
+        setForm((prev) => ({ ...prev, lat: Number(lat), lng: Number(lon) }));
+        toast.success("Location identified!");
+      } else {
+        toast.error("Location not found");
+      }
+    } catch (err) {
+      toast.error("Geocoding failed");
+    }
+  }
+
+  function updateCharger(idx, key, value) {
+    setForm(prev => {
+      const chargers = [...prev.chargers];
+      chargers[idx] = { ...chargers[idx], [key]: value };
+      return { ...prev, chargers };
+    });
+  }
+
+  function addCharger() {
+    setForm(prev => ({
+      ...prev,
+      chargers: [...prev.chargers, { type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }]
+    }));
+  }
+
+  function removeCharger(idx) {
+    setForm(prev => ({
+      ...prev,
+      chargers: prev.chargers.filter((_, i) => i !== idx)
+    }));
+  }
+
+  async function handleRegenerateSlots() {
+    if (!window.confirm("This will overwrite existing free slots for this station. Continue?")) return;
+    try {
+      setLoading(true);
+      await API.post(`/owner/stations/${encodeURIComponent(id)}/slots`, { regenerate: true });
+      toast.success("Availability updated successfully");
+    } catch (err) {
+      toast.error("Failed to update availability");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -84,19 +161,24 @@ export default function StationForm() {
       setLoading(true);
       const payload = {
         ...form,
-        lat: Number(form.lat),
         lng: Number(form.lng),
+        chargers: form.chargers.map(c => ({
+          ...c,
+          powerKw: Number(c.powerKw) || 0,
+          chargerCount: Number(c.chargerCount) || 1,
+          pricePerKwh: Number(c.pricePerKwh) || 0,
+        }))
       };
       if (editMode) {
         await API.put(`/owner/stations/${id}`, payload);
-        alert("Updated");
+        toast.success("Station instance updated");
       } else {
         await API.post("/owner/stations", payload);
-        alert("Created");
+        toast.success("Property registered successfully");
       }
       navigate("/owner/stations");
     } catch (err) {
-      alert("Save failed: " + (err?.response?.data?.message || err.message));
+      toast.error("Save failed");
     } finally {
       setLoading(false);
     }
@@ -105,130 +187,178 @@ export default function StationForm() {
   const amenitiesList = ["Parking", "Restroom", "Food Court", "WiFi", "Shop"];
 
   return (
-    <div className="container">
-      <h2 style={{ textAlign: "center" }}>
-        {editMode ? "Edit Station" : "Add Station"}
-      </h2>
-      <form
-        onSubmit={handleSubmit}
-        style={{ display: "grid", gap: 12, maxWidth: 700, margin: "auto" }}
-      >
-        <label>Station name</label>
-        <input name="name" value={form.name} onChange={onChange} required />
+    <div className="glass-panel p-8">
+      <div className="mb-10 text-center">
+        <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+          {editMode ? "Terminal Configuration" : "New Property Registry"}
+        </h2>
+        <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">Satellite System Interface</p>
+      </div>
 
-        <label>Address</label>
-        <input name="address" value={form.address} onChange={onChange} />
+      <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Identity Section */}
+          <section className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Station Designation</label>
+              <input name="name" value={form.name} onChange={onChange} required className="glass-input w-full" placeholder="e.g. GreenCharge Alpha" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Support Email</label>
+              <input name="email" value={form.email} onChange={onChange} type="email" className="glass-input w-full md:w-3/4" placeholder="support@station.com" />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Direct Contact</label>
+              <input name="phone" value={form.phone} onChange={onChange} className="glass-input w-full md:w-3/4" placeholder="+91 000 000 0000" />
+            </div>
+          </section>
 
-        <label>Email</label>
-        <input
-          name="email"
-          value={form.email}
-          onChange={onChange}
-          type="email"
-        />
+          {/* Type & Time section */}
+          <section className="space-y-4">
+            <div>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Category</label>
+              <select name="type" value={form.type} onChange={onChange} className="glass-input w-full appearance-none">
+                <option value="Public">Public</option>
+                <option value="Private">Private</option>
+              </select>
+            </div>
 
-        <label>Phone</label>
-        <input name="phone" value={form.phone} onChange={onChange} />
-
-        <label>Station Type</label>
-        <select name="type" value={form.type} onChange={onChange}>
-          <option value="Public">Public</option>
-          <option value="Private">Private</option>
-        </select>
-
-        <label>Price per kWh (₹)</label>
-        <input
-          type="number"
-          name="pricePerKwh"
-          value={form.pricePerKwh}
-          onChange={onChange}
-        />
-
-        <label>Operating Hours</label>
-        <div style={{ display: "flex", gap: 12 }}>
-          <input
-            type="time"
-            name="openTime"
-            value={form.openTime}
-            onChange={onChange}
-          />
-          <input
-            type="time"
-            name="closeTime"
-            value={form.closeTime}
-            onChange={onChange}
-          />
+            <div>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Window of Operation</label>
+              <div className="flex items-center gap-3">
+                <input type="time" name="openTime" value={form.openTime} onChange={onChange} className="glass-input flex-1" />
+                <span className="text-white/20 text-xs text-glow-primary">TO</span>
+                <input type="time" name="closeTime" value={form.closeTime} onChange={onChange} className="glass-input flex-1" />
+              </div>
+            </div>
+          </section>
         </div>
 
-        <label>Amenities</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {amenitiesList.map((am) => (
-            <label key={am}>
-              <input
-                type="checkbox"
-                checked={form.amenities.includes(am)}
-                onChange={(e) => {
-                  const newAmenities = e.target.checked
-                    ? [...form.amenities, am]
-                    : form.amenities.filter((a) => a !== am);
-                  setForm((prev) => ({ ...prev, amenities: newAmenities }));
+        {/* Address Mapping */}
+        <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-4">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Geographic Metadata</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <input name="fullAddress" value={form.address.fullAddress} onChange={onAddressChange} placeholder="Full Physical Address" className="glass-input w-full" />
+            </div>
+            <input name="city" value={form.address.city} onChange={onAddressChange} placeholder="City / District" required className="glass-input" />
+            <input name="pincode" value={form.address.pincode} onChange={onAddressChange} placeholder="Postal Code" className="glass-input" />
+          </div>
+          <button type="button" onClick={geocodeAddress} className="text-[10px] font-bold text-primary-light hover:text-white uppercase tracking-tighter flex items-center gap-2 mt-2">
+            📡 Sync Location from Address
+          </button>
+        </div>
+
+        {/* Charger Management */}
+        <div className="p-6 bg-white/5 rounded-2xl border border-white/5 space-y-6">
+          <div className="flex justify-between items-center">
+            <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-1">Charging Units</label>
+            <button type="button" className="text-[10px] font-bold text-primary-light hover:underline uppercase" onClick={addCharger}>+ Add Charger</button>
+          </div>
+
+          <div className="space-y-4">
+            {form.chargers.map((c, idx) => (
+              <div key={idx} className="glass-panel p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end group relative">
+                <div>
+                  <label className="text-[8px] text-white/20 font-bold uppercase mb-1 block">Type</label>
+                  <select value={c.type} onChange={(e) => updateCharger(idx, "type", e.target.value)} className="glass-input w-full p-2 text-xs appearance-none">
+                    <option value="AC">AC</option>
+                    <option value="DC">DC</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[8px] text-white/20 font-bold uppercase mb-1 block">Power (kW)</label>
+                  <input type="number" value={c.powerKw ?? ""} onChange={(e) => updateCharger(idx, "powerKw", e.target.value)} className="glass-input w-full p-2 text-xs" placeholder="e.g. 50" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-white/20 font-bold uppercase mb-1 block">Count</label>
+                  <input type="number" value={c.chargerCount ?? 1} min={1} onChange={(e) => updateCharger(idx, "chargerCount", e.target.value)} className="glass-input w-full p-2 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[8px] text-white/20 font-bold uppercase mb-1 block">Price / kWh</label>
+                  <input type="number" value={c.pricePerKwh ?? ""} onChange={(e) => updateCharger(idx, "pricePerKwh", e.target.value)} className="glass-input w-full p-2 text-xs" placeholder="e.g. 20" />
+                </div>
+                <div className="md:col-span-1 col-span-2">
+                  <button
+                    type="button"
+                    className="w-full py-2.5 text-[10px] font-bold text-red-500/40 hover:text-red-400 glass-panel border-none group-hover:bg-red-500/5 transition-colors"
+                    onClick={() => removeCharger(idx)}
+                    disabled={form.chargers.length <= 1}
+                  >
+                    REMOVE
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Amenities Selection */}
+        <div className="py-6 border-y border-white/5">
+          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-4 ml-1">On-Site Amenities</label>
+          <div className="flex flex-wrap gap-3">
+            {amenitiesList.map((am) => (
+              <label key={am} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-2 ${form.amenities.includes(am) ? "bg-primary/20 border-primary text-primary-light" : "bg-white/5 border-white/5 opacity-40 hover:opacity-100"}`}>
+                <input
+                  type="checkbox"
+                  checked={form.amenities.includes(am)}
+                  className="hidden"
+                  onChange={(e) => {
+                    const newAmenities = e.target.checked
+                      ? [...form.amenities, am]
+                      : form.amenities.filter((a) => a !== am);
+                    setForm((prev) => ({ ...prev, amenities: newAmenities }));
+                  }}
+                />
+                <span>{am}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Satellite Map Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 h-[400px] rounded-3xl overflow-hidden border border-white/10 glass-panel shadow-2xl relative">
+            <MapContainer center={[form.lat, form.lng]} zoom={13} style={{ height: "100%", width: "100%" }} className="map-tiles">
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <RecenterMap lat={form.lat} lng={form.lng} />
+              <Marker
+                position={[form.lat, form.lng]}
+                draggable={true}
+                eventHandlers={{
+                  dragend: (e) => {
+                    const position = e.target.getLatLng();
+                    setForm(prev => ({ ...prev, lat: position.lat, lng: position.lng }));
+                  },
                 }}
               />
-              {am}
-            </label>
-          ))}
+            </MapContainer>
+            <div className="absolute top-4 right-4 z-[1000] glass-panel px-4 py-2 text-[10px] font-bold bg-slate-900/80">Satellite Live</div>
+          </div>
+
+          <div className="lg:col-span-1 space-y-4 flex flex-col justify-center">
+            <div className="p-4 glass-panel border-white/5">
+              <label className="text-[8px] font-bold text-white/40 uppercase tracking-widest block mb-1">Latitude</label>
+              <input type="number" step="any" name="lat" value={form.lat} onChange={onChange} className="bg-transparent text-white font-mono text-lg outline-none w-full" />
+            </div>
+            <div className="p-4 glass-panel border-white/5">
+              <label className="text-[8px] font-bold text-white/40 uppercase tracking-widest block mb-1">Longitude</label>
+              <input type="number" step="any" name="lng" value={form.lng} onChange={onChange} className="bg-transparent text-white font-mono text-lg outline-none w-full" />
+            </div>
+          </div>
         </div>
 
-        <label>Coordinates (lat, lng)</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            name="lat"
-            value={form.lat}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, lat: e.target.value }))
-            }
-          />
-          <input
-            name="lng"
-            value={form.lng}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, lng: e.target.value }))
-            }
-          />
-        </div>
-
-        <div
-          style={{
-            height: 360,
-            borderRadius: 10,
-            overflow: "hidden",
-            border: "1px solid #e6efe6",
-          }}
-        >
-          <MapContainer
-            center={[form.lat, form.lng]}
-            zoom={13}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <ClickMarker
-              position={[form.lat, form.lng]}
-              onChange={(coords) => setCoords(coords)}
-            />
-          </MapContainer>
-        </div>
-
-        <div style={{ display: "flex", gap: 12, margin: "auto" }}>
-          <button className="btn" disabled={loading}>
-            {loading ? "Saving..." : "Save"}
+        {/* Final Actions */}
+        <div className="flex gap-4 pt-10 border-t border-white/5">
+          <button type="button" onClick={() => navigate("/owner/stations")} className="glass-btn flex-1 py-4 font-bold uppercase tracking-widest text-xs">Cancel</button>
+          <button className="glass-btn-primary flex-[2] py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-50" disabled={loading}>
+            {loading ? "Processing..." : editMode ? "Save Settings" : "Register Station"}
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => navigate("/owner/stations")}
-          >
-            Cancel
-          </button>
+          {editMode && (
+            <button type="button" className="glass-btn px-6 py-4 font-black uppercase tracking-widest text-[9px] text-yellow-500/60 border-yellow-500/20 hover:text-yellow-500 transition-colors" onClick={handleRegenerateSlots}>
+              Update Availability
+            </button>
+          )}
         </div>
       </form>
     </div>

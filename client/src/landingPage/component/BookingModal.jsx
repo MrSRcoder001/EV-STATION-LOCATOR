@@ -22,6 +22,17 @@ export default function BookingModal({
         slotId: slot._id,
       });
       const booking = res.data.booking || res.data;
+
+      // MOCK PAYMENT FLOW (Simulating payment directly inside booking confirmation)
+      toast("Processing mock payment...");
+      try {
+        await API.post(`/bookings/${booking._id || res.data.bookingId}/pay`, { amount: 150 });
+        toast.success("Payment successful! Eco points updated.");
+      } catch (payErr) {
+        toast.error("Payment simulator failed, but booking was created.");
+        console.warn("Payment error", payErr);
+      }
+
       onBooked(booking, slot._id);
       toast.success("Booking confirmed.");
     } catch (err) {

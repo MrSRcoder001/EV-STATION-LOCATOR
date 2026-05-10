@@ -14,6 +14,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const app = express();
 
+const adminRoutes = require('./routes/admin');
+const ecoRoutes = require('./routes/eco');
+const faultsRoutes = require('./routes/faults');
+const notificationsRoutes = require('./routes/notifications');
+
 app.use(cors());
 app.use(express.json());
 app.use('/api/owner/stations', ownerStationsRoutes);
@@ -21,15 +26,18 @@ app.use('/api/stations', ownerStationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/owner/bookings', require('./routes/owner/bookings'));
+app.use('/api/admin', adminRoutes);
+app.use('/api/eco', ecoRoutes);
+app.use('/api/faults', faultsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 app.use('/api', slotsRoutes);
-
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: 'http://localhost:5173', methods: ['GET','POST'] } // adjust origin
+  cors: { origin: 'http://localhost:5173', methods: ['GET', 'POST'] } // adjust origin
 });
 app.set('io', io);
 
@@ -58,9 +66,8 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 mongoose.connect(process.env.MONGODB_URI)
-  .then(()=> {
+  .then(() => {
     console.log('Connected to MongoDB');
-    app.listen(PORT, ()=> console.log(`Server running on http://localhost:${PORT}`));
+    server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
   })
   .catch(err => console.error('MongoDB connection error:', err));
- 

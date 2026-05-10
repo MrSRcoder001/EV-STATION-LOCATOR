@@ -7,6 +7,9 @@ const AppNavbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Do not render global Navbar for Admin routes (Admin has its own layout)
+  if (location.pathname.startsWith('/admin')) return null;
+
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -76,11 +79,9 @@ const AppNavbar = () => {
             </>
           ) : (
             <>
-              {userRole === "owner" ? (
+              {userRole === "admin" || userRole === "owner" ? (
                 <>
-                  <li><Link to="/owner/dashboard" className={`text-sm font-bold hover:text-primary-light ${isActive("/owner/dashboard") ? "text-primary-light text-glow-primary" : "text-white/60"}`}>Dashboard</Link></li>
-                  <li><Link to="/owner/bookings" className={`text-sm font-bold hover:text-primary-light ${isActive("/owner/bookings") ? "text-primary-light text-glow-primary" : "text-white/60"}`}>Manage Bookings</Link></li>
-                  <li><Link to="/owner/stations/new" className={`text-sm font-bold hover:text-primary-light ${isActive("/owner/stations/new") ? "text-primary-light text-glow-primary" : "text-white/60"}`}>Register Station</Link></li>
+                  <li><Link to="/admin/dashboard" className={`text-sm font-bold hover:text-primary-light ${isActive("/admin/dashboard") ? "text-primary-light text-glow-primary" : "text-white/60"}`}>Admin Dashboard</Link></li>
                 </>
               ) : (
                 <>
@@ -126,11 +127,9 @@ const AppNavbar = () => {
             <li><Link to="/auth" className="text-2xl font-black text-primary animate-pulse">Login / Signup</Link></li>
           ) : (
             <>
-              {userRole === "owner" ? (
+              {userRole === "admin" || userRole === "owner" ? (
                 <>
-                  <li><Link to="/owner/dashboard" className={`text-2xl font-black ${isActive("/owner/dashboard") ? "text-primary" : "text-white"}`}>Dashboard</Link></li>
-                  <li><Link to="/owner/bookings" className={`text-2xl font-black ${isActive("/owner/bookings") ? "text-primary" : "text-white"}`}>Manage Bookings</Link></li>
-                  <li><Link to="/owner/stations/new" className={`text-2xl font-black ${isActive("/owner/stations/new") ? "text-primary" : "text-white"}`}>Register Station</Link></li>
+                  <li><Link to="/admin/dashboard" className={`text-2xl font-black ${isActive("/admin/dashboard") ? "text-primary" : "text-white"}`}>Admin Dashboard</Link></li>
                 </>
               ) : (
                 <>

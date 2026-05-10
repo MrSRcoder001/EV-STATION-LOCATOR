@@ -59,8 +59,8 @@ router.put('/:id/decision', auth, ownerMiddleware, async (req, res) => {
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-    // Ensure owner owns this booking (booking.ownerId set at creation)
-    if (!booking.ownerId || String(booking.ownerId) !== String(ownerId)) {
+    // Ensure owner owns this booking (admin can bypass)
+    if (req.user.role !== 'admin' && (!booking.ownerId || String(booking.ownerId) !== String(ownerId))) {
       return res.status(403).json({ message: 'Not allowed to decide this booking' });
     }
 

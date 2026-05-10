@@ -97,12 +97,12 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-[90vh] flex items-center justify-center p-6 mt-10">
-      <div className="glass-panel w-full max-w-lg p-8 animate-float shadow-2xl">
+    <div className="flex items-center justify-center p-6 py-12">
+      <div className="glass-panel w-full max-w-lg p-10 lg:p-12 animate-float shadow-[0_30px_60px_-15px_rgba(0,0,0,0.7)] border-white/20">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 border border-primary/30 text-glow-primary">⚡</div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2">EV Station Locator</h1>
-          <p className="text-white/50 text-sm italic">Fast & Secure Sign In</p>
+          <div className="w-20 h-20 bg-gradient-to-tr from-primary/20 to-primary/10 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 border border-primary/40 text-glow-primary shadow-[0_0_30px_rgba(34,197,94,0.2)]">⚡</div>
+          <h1 className="text-3xl font-black tracking-tighter mb-2 text-white">EV Station Locator</h1>
+          <p className="text-primary-light/80 text-[10px] font-bold uppercase tracking-[0.3em]">Premium Access</p>
         </div>
 
         <div className="flex bg-white/5 p-1 rounded-xl mb-8 border border-white/5">
@@ -173,8 +173,8 @@ export default function AuthPage() {
             </>
           )}
 
-          <button className="glass-btn-primary w-full py-4 mt-4" disabled={loading}>
-            {loading ? "Processing..." : tab === "login" ? "Sign In" : "Create Account"}
+          <button className="glass-btn-primary w-full py-4 mt-6 text-sm tracking-widest uppercase shadow-[0_0_20px_rgba(34,197,94,0.2)] hover:shadow-[0_0_30px_rgba(34,197,94,0.4)]" disabled={loading}>
+            {loading ? "Processing..." : tab === "login" ? "Secure Sign In" : "Create Account"}
           </button>
         </form>
 

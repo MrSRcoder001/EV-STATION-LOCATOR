@@ -252,5 +252,47 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/bookings/:id/pay
+ * Mock payment for booking, calculates eco impact
+ */
+router.post('/:id/pay', auth, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id).populate('stationId');
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+    if (booking.paymentStatus === 'paid') {
+      return res.status(400).json({ message: 'Booking already paid' });
+    }
+
+    // Mock Payment amount
+    const amountToPay = req.body.amount || 150;
+    const priceKwh = booking.stationId.pricePerKwh || 15;
+    const kwhEstimate = amountToPay / priceKwh;
+
+    booking.paymentStatus = 'paid';
+    booking.amount = amountToPay;
+    booking.chargedKwh = kwhEstimate;
+    await booking.save();
+
+    // Update user wallet & eco impact
+    const User = require('../models/User');
+    const user = await User.findById(booking.userId);
+    if (user) {
+      if (user.walletBalance >= amountToPay) {
+        user.walletBalance -= amountToPay;
+      }
+      if (!user.ecoStats) user.ecoStats = { co2Saved: 0, fuelCostSaved: 0 };
+      user.ecoStats.co2Saved += (kwhEstimate * 0.85); // Dummy: 0.85 kg CO2 per kWh
+      user.ecoStats.fuelCostSaved += (kwhEstimate * 5); // Dummy: $5 saved per kWh vs ICE
+      await user.save();
+    }
+
+    res.json({ message: 'Payment successful', booking });
+  } catch (err) {
+    console.error('Payment error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 module.exports = router;

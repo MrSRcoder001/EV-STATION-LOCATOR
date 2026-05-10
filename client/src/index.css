@@ -30,8 +30,7 @@
 
 @layer base {
   body {
-    @apply bg-[#0f2027] text-white font-sans antialiased min-h-screen overflow-x-hidden;
-    background: radial-gradient(circle at top right, #1a2a6c, #203a43, #0f2027);
+    @apply bg-[#0f172a] text-white font-sans antialiased min-h-screen overflow-x-hidden;
   }
 }
 

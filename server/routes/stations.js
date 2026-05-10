@@ -31,7 +31,7 @@ function validateLatLng(lat, lng) {
  */
 router.get('/nearby', async (req, res) => {
   try {
-    const { lat, lng, maxDistance = 10000 } = req.query;
+    const { lat, lng, maxDistance = 10000, fastCharging, maxPrice } = req.query;
     if (lat === undefined || lng === undefined) return res.status(400).json({ message: 'lat & lng required' });
 
     const latitude = Number(lat);
@@ -42,15 +42,25 @@ router.get('/nearby', async (req, res) => {
       return res.status(400).json({ message: 'Invalid lat or lng' });
     }
 
-    // find nearby stations (2dsphere index required on Station.location)
-    const stations = await Station.find({
+    const query = {
       location: {
         $near: {
           $geometry: { type: "Point", coordinates: [longitude, latitude] },
           $maxDistance: maxDist
         }
       }
-    })
+    };
+
+    if (maxPrice) {
+      query.pricePerKwh = { $lte: Number(maxPrice) };
+    }
+
+    if (fastCharging === 'true') {
+      query['chargers.type'] = { $regex: /fast|ccs|dc/i };
+    }
+
+    // find nearby stations (2dsphere index required on Station.location)
+    const stations = await Station.find(query)
       .limit(100)
       .lean();
 
@@ -63,10 +73,30 @@ router.get('/nearby', async (req, res) => {
           isBooked: false,
           start: { $gte: now }
         });
-        return { ...s, availableSlots: freeCount };
+
+        // AI-based wait time simple heuristic (based on queue / next free slot)
+        let waitTime = 0; // minutes
+        if (freeCount === 0) {
+          const nextFreeSlot = await Slot.findOne({
+            stationId: s._id,
+            isBooked: false,
+            start: { $gte: now }
+          }).sort({ start: 1 });
+
+          if (nextFreeSlot) {
+            waitTime = Math.max(0, Math.floor((new Date(nextFreeSlot.start) - now) / 60000));
+          } else {
+            // Assume 60 minutes base wait time + variance based on hour of day (AI model simplified)
+            const hour = now.getHours();
+            const trafficMultiplier = (hour >= 9 && hour <= 18) ? 1.5 : 0.8;
+            waitTime = Math.floor(60 * trafficMultiplier);
+          }
+        }
+
+        return { ...s, availableSlots: freeCount, waitTime };
       } catch (e) {
         console.warn('Slot count error for station', s._id, e && e.message);
-        return { ...s, availableSlots: 0 };
+        return { ...s, availableSlots: 0, waitTime: 30 };
       }
     }));
 
@@ -127,7 +157,8 @@ router.post(
       if (Array.isArray(chargers) && chargers.length > 0) {
         cleanChargers = chargers.map(c => ({
           type: c.type || 'Normal',
-          count: Number(c.count) || 1
+          count: Number(c.count || c.chargerCount) || 1,
+          isActive: c.isActive !== undefined ? Boolean(c.isActive) : true
         }));
       } else {
         // default single charger if none provided
@@ -288,8 +319,8 @@ router.put('/:id', auth, owner, async (req, res) => {
     if (chargers !== undefined) {
       station.chargers = Array.isArray(chargers) ? chargers.map(c => ({
         type: c.type || 'Normal',
-        // Frontend might send count OR chargerCount
-        count: Number(c.count || c.chargerCount) || 1
+        count: Number(c.count || c.chargerCount) || 1,
+        isActive: c.isActive !== undefined ? Boolean(c.isActive) : true
       })) : station.chargers;
     }
 
@@ -557,6 +588,48 @@ router.get('/search', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('search error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/stations/:id/waiting-time
+ * Estimates wait time dynamically
+ */
+router.get('/:id/waiting-time', async (req, res) => {
+  try {
+    const stationId = req.params.id;
+    const now = new Date();
+    const freeCount = await Slot.countDocuments({
+      stationId,
+      isBooked: false,
+      start: { $gte: now }
+    });
+
+    let waitTime = 0;
+    if (freeCount === 0) {
+      const nextFreeSlot = await Slot.findOne({
+        stationId,
+        isBooked: false,
+        start: { $gte: now }
+      }).sort({ start: 1 });
+
+      if (nextFreeSlot) {
+        waitTime = Math.max(0, Math.floor((new Date(nextFreeSlot.start) - now) / 60000));
+      } else {
+        const hour = now.getHours();
+        const trafficMultiplier = (hour >= 9 && hour <= 18) ? 1.5 : 0.8;
+        waitTime = Math.floor(60 * trafficMultiplier);
+      }
+    }
+
+    // Check pending bookings to add artificial delay (Wait time prediction logic)
+    const pendingBookings = await mongoose.model('Booking').countDocuments({ stationId, status: 'pending' });
+    waitTime += (pendingBookings * 10); // Predict 10 min extra wait per pending booking queue
+
+    res.json({ waitTime, freeCount, pendingBookings });
+  } catch (err) {
+    console.error('Wait time error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

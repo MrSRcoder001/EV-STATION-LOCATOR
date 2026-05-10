@@ -27,7 +27,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen pt-20">
+    <div className="w-full">
       {/* Background blobs for depth */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[120px] animate-pulse-slow"></div>
@@ -39,9 +39,9 @@ export default function LandingPage() {
           <div className="inline-block px-4 py-1.5 mb-6 text-xs font-bold tracking-wider uppercase bg-primary/20 text-primary-light border border-primary/30 rounded-full">
             New • Premium Experience
           </div>
-          <h1 className="text-4xl lg:text-7xl font-extrabold leading-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-primary-light">
+          <h1 className="text-5xl lg:text-[5rem] font-black leading-[1.1] mb-8 bg-clip-text text-transparent bg-gradient-to-br from-white via-slate-200 to-primary-light tracking-tight drop-shadow-2xl">
             Find EV Charging Stations <br />
-            <span className="text-glow-primary">Fast & Simple.</span>
+            <span className="text-primary text-glow-primary">Fast & Simple.</span>
           </h1>
           <p className="text-lg lg:text-xl text-white/70 mb-10 max-w-2xl">
             The ultimate EV station finder. Locate nearby chargers, compare speeds,
@@ -145,8 +145,8 @@ export default function LandingPage() {
               <div className="text-4xl mb-6 bg-white/5 w-16 h-16 flex items-center justify-center rounded-2xl group-hover:bg-primary/20 transition-colors duration-300">
                 {feature.icon}
               </div>
-              <h3 className="text-xl font-bold mb-4">{feature.title}</h3>
-              <p className="text-white/50 leading-relaxed">{feature.desc}</p>
+              <h3 className="text-xl font-black tracking-tight mb-4 group-hover:text-primary transition-colors">{feature.title}</h3>
+              <p className="text-white/50 leading-relaxed font-medium">{feature.desc}</p>
             </div>
           ))}
         </div>

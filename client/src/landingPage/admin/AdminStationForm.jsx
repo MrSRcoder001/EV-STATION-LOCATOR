@@ -2,22 +2,10 @@
 import React, { useEffect, useState } from "react";
 import API from "../../api";
 import { useNavigate, useParams } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import fixLeafletIcons from "../../utils/leafletIconFix";
+import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import toast from 'react-hot-toast';
-
-fixLeafletIcons();
-
-function RecenterMap({ lat, lng }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([lat, lng]);
-  }, [lat, lng, map]);
-  return null;
-}
-
-export default function StationForm() {
+export default function AdminStationForm() {
+  const { isLoaded } = useJsApiLoader({ id: "google-map-script", googleMapsApiKey: "AIzaSyDZG_Bf3bqCrV6VnNykIVX3QeRjrTCpGbA" });
   const { id } = useParams();
   const editMode = !!id;
   const navigate = useNavigate();
@@ -35,11 +23,14 @@ export default function StationForm() {
     email: "",
     type: "Public",
     pricePerKwh: "",
+    basePrice: 15,
+    peakMultiplier: 1.5,
+    status: "Active",
     openTime: "06:00",
     closeTime: "22:00",
     lat: 18.5204,
     lng: 73.8567,
-    chargers: [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }],
+    chargers: [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "", isActive: true }],
     amenities: [],
   });
 
@@ -65,6 +56,9 @@ export default function StationForm() {
             email: s.email || "",
             type: s.type || "Public",
             pricePerKwh: s.pricePerKwh || "",
+            basePrice: s.pricing?.basePrice || 15,
+            peakMultiplier: s.pricing?.peakMultiplier || 1.5,
+            status: s.status || "Active",
             openTime: s.openTime || "06:00",
             closeTime: s.closeTime || "22:00",
             lat: s.location?.coordinates?.[1] || 18.5204,
@@ -73,13 +67,14 @@ export default function StationForm() {
               type: c.type || "AC",
               powerKw: c.powerKw ?? "",
               chargerCount: c.chargerCount ?? 1,
-              pricePerKwh: c.pricePerKwh ?? ""
-            })) : [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }],
+              pricePerKwh: c.pricePerKwh ?? "",
+              isActive: c.isActive ?? true
+            })) : [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "", isActive: true }],
             amenities: s.amenities || [],
           });
         } catch (err) {
           toast.error("Failed to load station");
-          navigate("/owner/stations");
+          navigate("/admin/stations");
         } finally {
           setLoading(false);
         }
@@ -131,7 +126,7 @@ export default function StationForm() {
   function addCharger() {
     setForm(prev => ({
       ...prev,
-      chargers: [...prev.chargers, { type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "" }]
+      chargers: [...prev.chargers, { type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "", isActive: true }]
     }));
   }
 
@@ -162,11 +157,17 @@ export default function StationForm() {
       const payload = {
         ...form,
         lng: Number(form.lng),
+        pricing: {
+          basePrice: Number(form.basePrice) || 0,
+          peakMultiplier: Number(form.peakMultiplier) || 1,
+        },
+        status: form.status || "Active",
         chargers: form.chargers.map(c => ({
           ...c,
           powerKw: Number(c.powerKw) || 0,
           chargerCount: Number(c.chargerCount) || 1,
           pricePerKwh: Number(c.pricePerKwh) || 0,
+          isActive: Boolean(c.isActive)
         }))
       };
       if (editMode) {
@@ -176,7 +177,7 @@ export default function StationForm() {
         await API.post("/owner/stations", payload);
         toast.success("Property registered successfully");
       }
-      navigate("/owner/stations");
+      navigate("/admin/stations");
     } catch (err) {
       toast.error("Save failed");
     } finally {
@@ -216,11 +217,18 @@ export default function StationForm() {
           {/* Type & Time section */}
           <section className="space-y-4">
             <div>
-              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Category</label>
-              <select name="type" value={form.type} onChange={onChange} className="glass-input w-full appearance-none">
-                <option value="Public">Public</option>
-                <option value="Private">Private</option>
-              </select>
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Category & Status</label>
+              <div className="flex gap-3">
+                <select name="type" value={form.type} onChange={onChange} className="glass-input flex-1 appearance-none">
+                  <option value="Public">Public</option>
+                  <option value="Private">Private</option>
+                </select>
+                <select name="status" value={form.status} onChange={onChange} className="glass-input flex-1 appearance-none">
+                  <option value="Active">Active</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </div>
             </div>
 
             <div>
@@ -229,6 +237,20 @@ export default function StationForm() {
                 <input type="time" name="openTime" value={form.openTime} onChange={onChange} className="glass-input flex-1" />
                 <span className="text-white/20 text-xs text-glow-primary">TO</span>
                 <input type="time" name="closeTime" value={form.closeTime} onChange={onChange} className="glass-input flex-1" />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2 ml-1">Dynamic Pricing Settings</label>
+              <div className="flex items-center gap-3">
+                <div className="flex-[2]">
+                  <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-1">Base Price / kWh</label>
+                  <input type="number" name="basePrice" value={form.basePrice} onChange={onChange} className="glass-input w-full" placeholder="e.g. 15" />
+                </div>
+                <div className="flex-[1]">
+                  <label className="text-[8px] font-bold text-white/20 uppercase tracking-widest block mb-1">Peak Mult</label>
+                  <input type="number" step="0.1" name="peakMultiplier" value={form.peakMultiplier} onChange={onChange} className="glass-input w-full" placeholder="e.g. 1.5" />
+                </div>
               </div>
             </div>
           </section>
@@ -278,7 +300,14 @@ export default function StationForm() {
                   <label className="text-[8px] text-white/20 font-bold uppercase mb-1 block">Price / kWh</label>
                   <input type="number" value={c.pricePerKwh ?? ""} onChange={(e) => updateCharger(idx, "pricePerKwh", e.target.value)} className="glass-input w-full p-2 text-xs" placeholder="e.g. 20" />
                 </div>
-                <div className="md:col-span-1 col-span-2">
+                <div className="md:col-span-1 col-span-2 flex items-center justify-between gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer pt-2">
+                    <input type="checkbox" className="hidden" checked={c.isActive} onChange={(e) => updateCharger(idx, "isActive", e.target.checked)} />
+                    <span className={`w-3 h-3 rounded-sm flex items-center justify-center border ${c.isActive ? 'bg-primary border-primary text-slate-900' : 'border-white/20 bg-white/5'}`}>
+                      {c.isActive && "✔"}
+                    </span>
+                    <span className="text-[8px] font-bold uppercase text-white/40">{c.isActive ? 'Active' : 'Disabled'}</span>
+                  </label>
                   <button
                     type="button"
                     className="w-full py-2.5 text-[10px] font-bold text-red-500/40 hover:text-red-400 glass-panel border-none group-hover:bg-red-500/5 transition-colors"
@@ -319,20 +348,24 @@ export default function StationForm() {
         {/* Satellite Map Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 h-[400px] rounded-3xl overflow-hidden border border-white/10 glass-panel shadow-2xl relative">
-            <MapContainer center={[form.lat, form.lng]} zoom={13} style={{ height: "100%", width: "100%" }} className="map-tiles">
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <RecenterMap lat={form.lat} lng={form.lng} />
-              <Marker
-                position={[form.lat, form.lng]}
-                draggable={true}
-                eventHandlers={{
-                  dragend: (e) => {
-                    const position = e.target.getLatLng();
-                    setForm(prev => ({ ...prev, lat: position.lat, lng: position.lng }));
-                  },
-                }}
-              />
-            </MapContainer>
+            {isLoaded ? (
+              <GoogleMap
+                center={{ lat: form.lat, lng: form.lng }}
+                zoom={13}
+                mapContainerStyle={{ height: "100%", width: "100%" }}
+                options={{ streetViewControl: false }}
+              >
+                <MarkerF
+                  position={{ lat: form.lat, lng: form.lng }}
+                  draggable={true}
+                  onDragEnd={(e) => {
+                    setForm(prev => ({ ...prev, lat: e.latLng.lat(), lng: e.latLng.lng() }));
+                  }}
+                />
+              </GoogleMap>
+            ) : (
+              <div className="flex items-center justify-center w-full h-full text-white/50">Loading Map...</div>
+            )}
             <div className="absolute top-4 right-4 z-[1000] glass-panel px-4 py-2 text-[10px] font-bold bg-slate-900/80">Satellite Live</div>
           </div>
 
@@ -350,7 +383,7 @@ export default function StationForm() {
 
         {/* Final Actions */}
         <div className="flex gap-4 pt-10 border-t border-white/5">
-          <button type="button" onClick={() => navigate("/owner/stations")} className="glass-btn flex-1 py-4 font-bold uppercase tracking-widest text-xs">Cancel</button>
+          <button type="button" onClick={() => navigate("/admin/stations")} className="glass-btn flex-1 py-4 font-bold uppercase tracking-widest text-xs">Cancel</button>
           <button className="glass-btn-primary flex-[2] py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-50" disabled={loading}>
             {loading ? "Processing..." : editMode ? "Save Settings" : "Register Station"}
           </button>

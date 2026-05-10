@@ -122,14 +122,14 @@ export default function UserProfile() {
   }, [user.id]);
 
   return (
-    <div className="min-h-screen pt-32 pb-20 px-6 container mx-auto">
+    <div className="py-8 px-6 container mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
         {/* Profile Info Section */}
         <aside className="lg:col-span-1">
           <div className="glass-panel p-8 sticky top-32">
             <div className="flex justify-between items-center mb-8">
-              <h2 className="text-xl font-black tracking-tighter uppercase">Profile</h2>
+              <h2 className="text-2xl font-black tracking-tighter text-white drop-shadow-md">Profile Settings</h2>
               {!editing && (
                 <button className="text-[10px] font-bold text-primary-light hover:underline" onClick={() => setEditing(true)}>
                   Edit →
@@ -168,6 +168,27 @@ export default function UserProfile() {
                     </div>
                   )}
                 </div>
+
+                {/* Eco Impact Dashboard */}
+                <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
+                  <h4 className="text-[10px] font-black tracking-widest uppercase text-primary-light text-left mb-2">Eco Impact & Wallet</h4>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-white/40 font-bold">Wallet Balance</span>
+                    <span className="font-mono text-green-400 font-bold">₹ {user.walletBalance || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-white/40 font-bold">CO₂ Saved</span>
+                    <span className="font-mono text-white font-bold">{(user.ecoStats?.co2Saved || 0).toFixed(1)} kg</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-white/40 font-bold">Fuel Cost Saved</span>
+                    <span className="font-mono text-white font-bold">₹ {(user.ecoStats?.fuelCostSaved || 0).toFixed(0)}</span>
+                  </div>
+                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden mt-3">
+                    <div className="h-full bg-primary" style={{ width: `${Math.min(((user.ecoStats?.co2Saved || 0) / 100) * 100, 100)}%` }}></div>
+                  </div>
+                  <p className="text-[8px] text-white/30 text-left uppercase tracking-wider italic">Road to 100kg CO₂ saved</p>
+                </div>
               </div>
             )}
           </div>
@@ -176,8 +197,8 @@ export default function UserProfile() {
         {/* Bookings Section */}
         <main className="lg:col-span-2 space-y-8">
           <div className="glass-panel p-8">
-            <h3 className="text-xl font-black tracking-tighter uppercase mb-8 flex items-center gap-3">
-              <span className="w-2 h-6 bg-primary rounded-full"></span>
+            <h3 className="text-2xl font-black tracking-tighter text-white mb-10 flex items-center gap-4">
+              <span className="w-2 h-8 bg-gradient-to-b from-primary to-primary-dark rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
               Booking History
             </h3>
 
@@ -189,37 +210,59 @@ export default function UserProfile() {
                 <button className="glass-btn-primary mt-6 px-8 py-3 text-xs" onClick={() => navigate('/home')}>Find Stations</button>
               </div>
             ) : (
-              <div className="space-y-4">
-                {bookings.map((b) => (
-                  <div className="glass-card p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 group" key={b._id}>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-primary text-glow-primary">🔌</span>
-                        <h4 className="font-black text-lg group-hover:text-primary-light transition-colors">{b.stationId?.name || "Station"}</h4>
-                      </div>
-                      <p className="text-xs text-white/40 mb-4 line-clamp-1 italic">{[b.stationId?.address?.fullAddress, b.stationId?.address?.area, b.stationId?.address?.village, b.stationId?.address?.city, b.stationId?.address?.pincode].filter(Boolean).join(', ')}</p>
-                      <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-white/30">
-                        <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span> {new Date(b.slotId?.start || b.start).toLocaleDateString()}</span>
-                        <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span> {new Date(b.slotId?.start || b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-3 w-full md:w-auto">
-                      <span className={`px-4 py-1.5 rounded-lg border text-[10px] font-black tracking-widest uppercase ${getStatusStyle(b.status)}`}>
-                        {b.status}
-                      </span>
-                      <div className="text-right">
-                        <div className="text-lg font-black text-white italic">₹{b.price || "—"}</div>
-                        <div className="text-[9px] text-white/30 font-bold uppercase">Total Amount</div>
-                      </div>
-                      {String(b.status).toLowerCase() === 'pending' && (
-                        <button className="text-[10px] font-bold text-red-500/60 hover:text-red-500 underline uppercase tracking-tighter mt-2" onClick={() => cancelBooking(b._id)}>
-                          Cancel Booking
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-white/30 border-b border-white/5 uppercase tracking-widest text-[11px]">
+                      <th className="pb-4 font-bold pl-4">Station / Location</th>
+                      <th className="pb-4 font-bold text-center">Date & Time</th>
+                      <th className="pb-4 font-bold text-right text-primary">Amount</th>
+                      <th className="pb-4 font-bold text-center">Status</th>
+                      <th className="pb-4 font-bold text-right pr-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white/80">
+                    {bookings.map((b) => (
+                      <tr key={b._id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                        <td className="py-4 pl-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center text-sm font-black transform group-hover:scale-110 transition-transform duration-300">
+                              🔌
+                            </div>
+                            <div>
+                              <div className="font-bold text-white max-w-[150px] truncate group-hover:text-primary-light transition-colors">{b.stationId?.name || "Station"}</div>
+                              <div className="text-[10px] text-white/30 font-medium truncate max-w-[180px]">{[b.stationId?.address?.fullAddress, b.stationId?.address?.area, b.stationId?.address?.city].filter(Boolean).join(', ') || "-"}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 text-center">
+                          <div className="font-mono text-white/80 font-bold">{new Date(b.slotId?.start || b.start).toLocaleDateString()}</div>
+                          <div className="text-[10px] text-white/40 font-mono mt-0.5">{new Date(b.slotId?.start || b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        </td>
+                        <td className="py-4 text-right">
+                          <span className="font-mono font-black text-lg text-white group-hover:text-primary-light transition-colors drop-shadow-md">₹{b.price || "—"}</span>
+                        </td>
+                        <td className="py-4 text-center">
+                          <span className={`px-3 py-1 rounded-lg border text-[10px] font-black tracking-widest uppercase inline-block shadow-sm ${getStatusStyle(b.status)}`}>
+                            {b.status}
+                          </span>
+                        </td>
+                        <td className="py-4 text-right pr-4">
+                          {String(b.status).toLowerCase() === 'pending' ? (
+                            <button
+                              className="text-[10px] font-bold text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter shadow-md active:scale-95"
+                              onClick={() => cancelBooking(b._id)}
+                            >
+                              Cancel
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

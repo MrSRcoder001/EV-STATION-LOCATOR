@@ -1,32 +1,22 @@
 // client/src/landingPage/pages/Home.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
-import "leaflet-routing-machine";
-import L from "leaflet";
+import { GoogleMap, MarkerF, InfoWindowF, DirectionsRenderer, useJsApiLoader } from "@react-google-maps/api";
+import { useLocation } from "react-router-dom";
 import API from "../../api";
 import toast from 'react-hot-toast';
-// styles handled by index.css and tailwind
+import Sidebar from '../component/Sidebar';
+import Header from '../component/Header';
+import StatCards from '../component/StatCards';
+import NearbyStationsList from '../component/NearbyStationsList';
+import StationDetailsPane from '../component/StationDetailsPane';
+import FaultReportModal from '../component/FaultReportModal';
 // marker icons
-const greenIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-const yellowIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-yellow.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-const defaultIcon = new L.Icon({
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
+
+const greenIcon = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png";
+const yellowIcon = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-yellow.png";
+const defaultIcon = "http://maps.google.com/mapfiles/ms/icons/red-dot.png";
+const liveIconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+
 
 // helper to format address object or string
 const formatAddress = (addr) => {
@@ -47,6 +37,7 @@ function mapDbStationToUnified(s) {
     : ["AC"];
   const availableSlots = s.availableSlots ?? s.estimatedSlots ?? 0;
   const pricePerKWh = s.pricePerKWh || (s.chargers && s.chargers[0] && s.chargers[0].pricePerKwh) || 0;
+  const waitTime = s.waitTime || 0;
   return {
     id: `db_${s._id}`,
     rawId: s._id,
@@ -57,6 +48,8 @@ function mapDbStationToUnified(s) {
     connectors,
     availableSlots,
     pricePerKWh,
+    waitTime,
+    status: s.status || 'Active',
     original: s,
   };
 }
@@ -81,31 +74,83 @@ function mapOcmToUnified(s, index) {
   };
 }
 
-// Sub-component to manage marker popups when shifted/searched
-function MarkerController({ activeId, markerId, children }) {
-  const markerRef = useRef(null);
-  useEffect(() => {
-    if (activeId === markerId && markerRef.current) {
-      markerRef.current.openPopup();
-    }
-  }, [activeId, markerId]);
-
-  return React.cloneElement(children, { ref: markerRef });
-}
 
 export default function Home() {
+  const { isLoaded } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: "AIzaSyDZG_Bf3bqCrV6VnNykIVX3QeRjrTCpGbA"
+  });
+
+  const [directionsResponse, setDirectionsResponse] = useState(null);
   const [query, setQuery] = useState("");
   const [stations, setStations] = useState([]);
   const [selectedStation, setSelectedStation] = useState(null);
   const [bookingSlot, setBookingSlot] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showFaultModal, setShowFaultModal] = useState(false);
+  const [faultStation, setFaultStation] = useState(null);
   const [activeMarkerId, setActiveMarkerId] = useState(null);
   const [bookingSlotsList, setBookingSlotsList] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [searchMarker, setSearchMarker] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [routingControl, setRoutingControl] = useState(null);
+
+  // Trip Planner & Battery
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState("search");
+  const [tripSource, setTripSource] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('tab') === 'trip') setActiveTab('trip');
+    else setActiveTab('search');
+  }, [location.search]);
+  const [tripDest, setTripDest] = useState("");
+  const [batteryLevel, setBatteryLevel] = useState(100);
+
+  // Realtime Navigation Overlays
+  const [routeStats, setRouteStats] = useState(null);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [livePosition, setLivePosition] = useState(null);
+  const navWatchId = useRef(null);
+
   const mapRef = useRef();
+
+  // Map Filter Status State
+  const [filterMode, setFilterMode] = useState("all");
+
+  // Derive final filtered and ranked stations (AI Smart Recommendation)
+  const derivedStations = React.useMemo(() => {
+    let filtered = [...stations];
+
+    // 1. Apply Filters
+    if (filterMode === 'fast') {
+      filtered = filtered.filter(s => s.connectors.some(c => String(c).toLowerCase().includes('dc') || String(c).toLowerCase().includes('ccs') || String(c).toLowerCase().includes('fast')));
+    } else if (filterMode === 'available') {
+      filtered = filtered.filter(s => s.availableSlots > 0 && s.status === 'Active');
+    }
+
+    // 2. AI Rating - Smart Ranking System
+    // Formula computation prioritizing Lowest Wait Time, Available Slots, and Cheaper price
+    let ranked = filtered.map(s => {
+      let score = 0;
+      score += (s.waitTime || 0) * 1.5;
+      score += (s.pricePerKWh || 20) * 0.8;
+      if (s.availableSlots <= 0) score += 9999; // Deprioritize full stations
+      return { ...s, aiScore: score };
+    });
+
+    ranked.sort((a, b) => a.aiScore - b.aiScore);
+
+    // Tag the absolute best station based on the composite rating
+    if (ranked.length > 0 && ranked[0].availableSlots > 0 && filterMode === "all") {
+      ranked[0] = { ...ranked[0], isBest: true };
+    }
+
+    return ranked;
+  }, [stations, filterMode]);
+
 
   // fetch OpenChargeMap stations
   const fetchOcmStations = async (lat, lon) => {
@@ -203,7 +248,7 @@ export default function Home() {
     }
 
     if (localMatch && mapRef.current) {
-      mapRef.current.flyTo([localMatch.coords.lat, localMatch.coords.lng], 15, { animate: true, duration: 1.5 });
+      if (mapRef.current) { mapRef.current.panTo({ lat: localMatch.coords.lat, lng: localMatch.coords.lng }); mapRef.current.setZoom(15); };
       setActiveMarkerId(localMatch.id);
 
       // Move localMatch to the top of the stations array for the sidebar
@@ -230,7 +275,7 @@ export default function Home() {
         setSearchMarker({ lat: newLat, lng: newLon, label: display_name });
 
         if (mapRef.current) {
-          mapRef.current.flyTo([newLat, newLon], 13, { animate: true, duration: 1.2 });
+          if (mapRef.current) { mapRef.current.panTo({ lat: newLat, lng: newLon }); mapRef.current.setZoom(13); };
         }
 
         await fetchStations(newLat, newLon);
@@ -243,6 +288,47 @@ export default function Home() {
     }
   };
 
+  const planTrip = async () => {
+    if (!tripSource || !tripDest) return toast.error("Enter start and destination");
+    try {
+      const srcRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(tripSource)}`);
+      const destRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(tripDest)}`);
+      const srcData = await srcRes.json();
+      const destData = await destRes.json();
+
+      if (srcData.length > 0 && destData.length > 0) {
+        const sLat = parseFloat(srcData[0].lat);
+        const sLng = parseFloat(srcData[0].lon);
+        const dLat = parseFloat(destData[0].lat);
+        const dLng = parseFloat(destData[0].lon);
+
+        // Turn off any previous live tracking
+        if (isNavigating) {
+          if (navWatchId.current) navigator.geolocation.clearWatch(navWatchId.current);
+          setIsNavigating(false);
+        }
+
+        setUserLocation({ lat: sLat, lng: sLng });
+        setSearchMarker({ lat: dLat, lng: dLng, label: "Destination" });
+
+        if (mapRef.current) {
+          if (window.google) {
+            const bounds = new window.google.maps.LatLngBounds();
+            bounds.extend({ lat: sLat, lng: sLng });
+            bounds.extend({ lat: dLat, lng: dLng });
+            mapRef.current.fitBounds(bounds);
+          };
+        }
+        await fetchStations((sLat + dLat) / 2, (sLng + dLng) / 2);
+        toast.success("Trip route mapped. Showing stations along the way.");
+      } else {
+        toast.error("Could not find start or destination coordinates.");
+      }
+    } catch (err) {
+      toast.error("Error planning trip");
+    }
+  };
+
   const panToUser = () => {
     if (!navigator.geolocation) return toast.error("Geolocation not supported");
     navigator.geolocation.getCurrentPosition(
@@ -250,13 +336,41 @@ export default function Home() {
         const pos = { lat: position.coords.latitude, lng: position.coords.longitude };
         setUserLocation(pos);
         if (mapRef.current)
-          mapRef.current.flyTo([pos.lat, pos.lng], 13, { animate: true, duration: 1.2 });
+          if (mapRef.current) { mapRef.current.panTo({ lat: pos.lat, lng: pos.lng }); mapRef.current.setZoom(13); };
         fetchStations(pos.lat, pos.lng);
       },
       (err) => {
         console.error("geolocation error", err);
         toast.error("Unable to retrieve your location.");
       }
+    );
+  };
+
+  const startNavigation = () => {
+    if (isNavigating) {
+      // stop navigation
+      if (navWatchId.current) navigator.geolocation.clearWatch(navWatchId.current);
+      setIsNavigating(false);
+      setLivePosition(null);
+      return;
+    }
+    if (!navigator.geolocation) return toast.error("Geolocation not supported");
+    setIsNavigating(true);
+    toast.success("Live navigation started. Map will follow you.");
+
+    // Start tracking specific to navigation overlay, without interrupting Leaflet routes
+    navWatchId.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setLivePosition(coords);
+        if (mapRef.current) if (mapRef.current) { mapRef.current.panTo({ lat: coords.lat, lng: coords.lng }); mapRef.current.setZoom(16); };
+      },
+      (err) => {
+        console.error("live tracking failed", err);
+        toast.error("Live tracking signal lost");
+        setIsNavigating(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
   };
 
@@ -317,9 +431,9 @@ export default function Home() {
     } else {
       const today = new Date();
       setBookingSlotsList([
-        { slotId: "ocm-0900", start: new Date(today.setHours(9, 0, 0, 0)), end: new Date(today.setHours(10, 0, 0, 0)) },
-        { slotId: "ocm-1000", start: new Date(today.setHours(10, 0, 0, 0)), end: new Date(today.setHours(11, 0, 0, 0)) },
-        { slotId: "ocm-1100", start: new Date(today.setHours(11, 0, 0, 0)), end: new Date(today.setHours(12, 0, 0, 0)) },
+        { slotId: "ocm-0900", isDemo: true, start: new Date(today.setHours(9, 0, 0, 0)), end: new Date(today.setHours(10, 0, 0, 0)) },
+        { slotId: "ocm-1000", isDemo: true, start: new Date(today.setHours(10, 0, 0, 0)), end: new Date(today.setHours(11, 0, 0, 0)) },
+        { slotId: "ocm-1100", isDemo: true, start: new Date(today.setHours(11, 0, 0, 0)), end: new Date(today.setHours(12, 0, 0, 0)) },
       ]);
     }
   };
@@ -354,7 +468,7 @@ export default function Home() {
 
   const handleBookFromList = (station) => {
     if (mapRef.current && station?.coords) {
-      mapRef.current.setView([station.coords.lat, station.coords.lng], 14);
+      if (mapRef.current) { mapRef.current.panTo({ lat: station.coords.lat, lng: station.coords.lng }); mapRef.current.setZoom(14); };
     }
     setActiveMarkerId(station.id);
     openBooking(station);
@@ -362,183 +476,172 @@ export default function Home() {
 
   useEffect(() => {
     if (!mapRef.current) return;
-    if (routingControl) { routingControl.remove(); setRoutingControl(null); }
+    if (directionsResponse) setDirectionsResponse(null);
     if (userLocation && searchMarker) {
-      const control = L.Routing.control({
-        waypoints: [L.latLng(userLocation.lat, userLocation.lng), L.latLng(searchMarker.lat, searchMarker.lng)],
-        routeWhileDragging: false, addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true, showAlternatives: false,
-        lineOptions: { styles: [{ color: "#22c55e", weight: 5 }] },
-      }).addTo(mapRef.current);
-      setRoutingControl(control);
+      if (window.google) {
+        const directionsService = new window.google.maps.DirectionsService();
+        directionsService.route({
+          origin: { lat: userLocation.lat, lng: userLocation.lng },
+          destination: { lat: searchMarker.lat, lng: searchMarker.lng },
+          travelMode: window.google.maps.TravelMode.DRIVING
+        }, (result, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK) {
+            setDirectionsResponse(result);
+            const route = result.routes[0].legs[0];
+            setRouteStats({
+              distance: route.distance.text.replace(' km', ''),
+              time: route.duration.text
+            });
+          }
+        });
+      }
+    } else {
+      setRouteStats(null);
     }
-    return () => { if (routingControl) routingControl.remove(); };
+
   }, [userLocation, searchMarker]);
 
+  const [selectedStationForPane, setSelectedStationForPane] = useState(null);
+
+  const modifiedHandleBookFromList = (station) => {
+    if (mapRef.current && station?.coords) {
+      if (mapRef.current) { mapRef.current.panTo({ lat: station.coords.lat, lng: station.coords.lng }); mapRef.current.setZoom(14); };
+    }
+    setActiveMarkerId(station.id);
+    setSelectedStationForPane(station);
+  };
+
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4 lg:px-8">
-      {/* Header Glass Panel */}
-      <header className="glass-panel p-6 lg:p-8 mb-8 flex flex-col lg:flex-row justify-between items-center gap-6">
-        <div>
-          <h1 className="text-3xl lg:text-4xl font-extrabold text-glow-primary">Find Charging Points</h1>
-          <p className="text-white/60">Find chargers near you • Book a time slot</p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <input
-            className="glass-input flex-1 lg:min-w-[300px]"
-            placeholder="Search location (e.g. Pune)..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+    <div className="flex bg-[#0f172a] h-[calc(100vh-96px)] overflow-hidden text-white font-sans">
+      <Sidebar />
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <div className="p-4 lg:p-6 overflow-y-auto w-full h-full custom-scrollbar relative flex flex-col">
+          <Header
+            query={query} setQuery={setQuery} handleSearch={handleSearch}
+            activeTab={activeTab} setActiveTab={setActiveTab}
+            tripSource={tripSource} setTripSource={setTripSource}
+            tripDest={tripDest} setTripDest={setTripDest}
+            batteryLevel={batteryLevel} setBatteryLevel={setBatteryLevel}
+            planTrip={planTrip}
           />
-          <div className="flex gap-2">
-            <button className="glass-btn-primary flex-1 sm:flex-none" onClick={handleSearch}>Search</button>
-            <button className="glass-btn flex-1 sm:flex-none" onClick={panToUser} title="My Location">📍</button>
-            <button className="glass-btn flex-1 sm:flex-none text-red-400" onClick={() => setQuery("")}>✕</button>
-          </div>
-        </div>
-      </header>
 
-      <main className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-full">
-        <section className="lg:col-span-3 flex flex-col gap-8">
-          {/* Map Section */}
-          <div className="glass-panel overflow-hidden relative group">
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-              <h2 className="font-bold flex items-center gap-2">
-                <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                Interactive Station Map
-              </h2>
-              <span className="text-[10px] uppercase tracking-widest text-white/40">Real-time Data</span>
-            </div>
+          <div className="flex-1 flex flex-col lg:flex-row min-h-[500px] mb-6 relative gap-4">
+            <div className="flex-1 relative rounded-2xl overflow-hidden glass-panel shadow-lg min-h-[400px]">
 
-            <div className="h-[500px] lg:h-[600px] w-full z-0">
-              <MapContainer
-                center={[18.5204, 73.8567]}
-                zoom={13}
-                style={{ width: "100%", height: "100%" }}
-                whenCreated={(map) => (mapRef.current = map)}
-              >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" className="map-tiles" />
-
-                {searchMarker && (
-                  <Marker position={[searchMarker.lat, searchMarker.lng]} icon={defaultIcon}>
-                    <Popup><div className="font-bold">{searchMarker.label}</div></Popup>
-                  </Marker>
-                )}
-
-                {stations.map((s) => (
-                  <MarkerController key={s.id} activeId={activeMarkerId} markerId={s.id}>
-                    <Marker
-                      position={[s.coords.lat, s.coords.lng]}
-                      icon={s.source === "db" ? greenIcon : yellowIcon}
-                    >
-                      <Popup autoPan={false}>
-                        <div className="min-w-[200px] p-2">
-                          <div className="flex justify-between items-start mb-2">
-                            <strong className="text-slate-900">{s.name}</strong>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${s.source === "db" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                              {s.source === "db" ? "Owner" : "OCM"}
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-600 mb-3 line-clamp-2">{s.address}</div>
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                            <span className="text-sm font-bold text-primary">{s.availableSlots} free</span>
-                            <button
-                              className="bg-primary text-white text-[10px] px-3 py-1.5 rounded-lg hover:bg-primary-dark transition-colors font-bold"
-                              onClick={() => openBooking(s)}
-                            >
-                              Book Now
-                            </button>
-                          </div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  </MarkerController>
-                ))}
-
-                {userLocation && (
-                  <Marker position={[userLocation.lat, userLocation.lng]} icon={defaultIcon}>
-                    <Popup><strong>You are here</strong></Popup>
-                  </Marker>
-                )}
-              </MapContainer>
-            </div>
-          </div>
-
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {stations.map((s) => (
-              <div key={s.id} className="glass-card group hover:scale-[1.02]">
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`p-2 rounded-lg bg-white/5 border border-white/10 group-hover:bg-primary/20 transition-colors`}>
-                      {s.source === "db" ? "🔌" : "🌐"}
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${s.source === "db" ? "bg-primary/20 text-primary-light" : "bg-secondary/20 text-secondary"}`}>
-                      {s.source === "db" ? "PREMIUM" : "OCM"}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-lg mb-1 truncate">{s.name}</h3>
-                  <p className="text-xs text-white/50 mb-4 line-clamp-1">{s.address}</p>
-
-                  <div className="flex flex-wrap gap-1.5 mb-6">
-                    {s.connectors?.map((c, i) => (
-                      <span key={i} className="text-[10px] px-2 py-0.5 glass-panel border-white/5 rounded-full">{c}</span>
-                    ))}
-                  </div>
-
-                  <div className="pt-4 border-t border-white/5 flex justify-between items-center">
-                    <div>
-                      <div className="text-lg font-extrabold text-primary-light">{s.availableSlots} <span className="text-[10px] font-normal text-white/40 uppercase">Slots</span></div>
-                      <div className="text-[10px] text-white/30">From ₹{s.pricePerKWh}/kWh</div>
-                    </div>
-                    <button
-                      className="glass-btn-primary px-4 py-2 text-xs"
-                      onClick={() => handleBookFromList(s)}
-                    >
-                      Book
-                    </button>
-                  </div>
-                </div>
+              {/* Map filters absolute positioned on top */}
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 lg:left-4 lg:translate-x-0 z-10 flex flex-wrap justify-center gap-2">
+                <button onClick={() => setFilterMode("all")} className={`${filterMode === "all" ? "bg-primary text-slate-900 border-primary shadow-[0_0_15px_rgba(34,197,94,0.4)]" : "bg-white/10 text-white border-white/20 hover:bg-white/20"} backdrop-blur-md border rounded-full px-4 py-2 font-bold text-xs flex items-center shadow-md transition-all`}>
+                  🌍 All Near
+                </button>
+                <button onClick={() => setFilterMode("fast")} className={`${filterMode === "fast" ? "bg-primary text-slate-900 border-primary shadow-[0_0_15px_rgba(34,197,94,0.4)]" : "bg-white/10 text-white border-white/20 hover:bg-white/20"} backdrop-blur-md border rounded-full px-4 py-2 font-bold text-xs flex items-center shadow-md transition-all`}>
+                  ⚡ Fast Charging
+                </button>
+                <button onClick={() => setFilterMode("available")} className={`${filterMode === "available" ? "bg-primary text-slate-900 border-primary shadow-[0_0_15px_rgba(34,197,94,0.4)]" : "bg-white/10 text-white border-white/20 hover:bg-white/20"} backdrop-blur-md border rounded-full px-4 py-2 font-bold text-xs flex items-center shadow-md transition-all`}>
+                  🟢 Available Now
+                </button>
               </div>
-            ))}
-          </div>
-        </section>
 
-        {/* Sidebar */}
-        <aside className="lg:col-span-1 space-y-8">
-          <div className="glass-panel p-6 h-full flex flex-col">
-            <h3 className="font-bold text-xl mb-6 flex items-center gap-2">
-              <span className="w-4 h-4 rounded-md bg-secondary flex items-center justify-center text-[10px]">★</span>
-              Nearby Results
-            </h3>
-            <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-              {stations.map((s) => (
-                <div
-                  key={s.id}
-                  className="p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer"
-                  onClick={() => handleBookFromList(s)}
-                >
-                  <div className="flex justify-between font-bold text-sm mb-1">
-                    <span className="truncate max-w-[120px]">{s.name}</span>
-                    <span className="text-primary-light text-[10px]">{s.availableSlots} FREE</span>
+              {routeStats && activeTab === 'trip' && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[500] bg-slate-900/90 backdrop-blur-md p-4 rounded-xl shadow-[0_0_20px_rgba(34,197,94,0.3)] border border-primary/20 w-64">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-white text-xl font-bold flex items-center gap-2">🚗 {routeStats.time}</div>
+                      <div className="text-white/70 text-sm font-semibold">{routeStats.distance} km</div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-white/30 truncate mb-2">{s.connectors?.join(", ")}</div>
-                  <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-white/60">₹{s.pricePerKWh}/kWh</span>
-                    <span className="bg-white/5 px-2 py-0.5 rounded-md">BOOK →</span>
-                  </div>
+                  <button
+                    onClick={startNavigation}
+                    className={`mt-4 w-full py-2.5 rounded-lg font-bold text-sm transition-all shadow-md active:scale-95 ${isNavigating ? 'bg-red-500/80 text-white hover:bg-red-500' : 'bg-primary text-slate-900 hover:bg-primary-light'}`}
+                  >
+                    {isNavigating ? "⏹ Stop Navigation" : "📍 Start Live Tracking"}
+                  </button>
                 </div>
-              ))}
-              {stations.length === 0 && <div className="text-center py-12 text-white/20 italic">No stations found...</div>}
-            </div>
-          </div>
-        </aside>
-      </main>
+              )}
 
-      {/* Modern Booking Modal */}
+              {isLoaded ? (
+                <GoogleMap
+                  mapContainerStyle={{ height: "100%", width: "100%" }}
+                  center={{ lat: 18.5204, lng: 73.8567 }}
+                  zoom={13}
+                  onLoad={(map) => (mapRef.current = map)}
+                  options={{
+                    disableDefaultUI: true, // removes cluttered UI
+                    zoomControl: true,
+                  }}
+                >
+                  {directionsResponse && (
+                    <DirectionsRenderer directions={directionsResponse} options={{ preserveViewport: true, polylineOptions: { strokeColor: '#3b82f6', strokeWeight: 6 } }} />
+                  )}
+
+                  {isNavigating && livePosition && (
+                    <MarkerF position={livePosition} icon={{ url: liveIconUrl }} zIndex={1000} />
+                  )}
+
+                  {userLocation && !directionsResponse && (
+                    <MarkerF position={userLocation} />
+                  )}
+
+                  {searchMarker && !directionsResponse && (
+                    <MarkerF position={{ lat: searchMarker.lat, lng: searchMarker.lng }} icon={{ url: defaultIcon }}>
+                      <InfoWindowF position={{ lat: searchMarker.lat, lng: searchMarker.lng }}>
+                        <div className="font-bold text-slate-900">{searchMarker.label}</div>
+                      </InfoWindowF>
+                    </MarkerF>
+                  )}
+
+                  {derivedStations.map((s) => {
+                    let pinUrl = yellowIcon;
+                    if (s.isBest) pinUrl = greenIcon;
+                    else if (s.source === "db") {
+                      if (s.status === 'Maintenance' || s.status === 'Closed' || s.availableSlots === 0) pinUrl = defaultIcon; // Red Dot
+                      else pinUrl = liveIconUrl; // Blue Dot
+                    }
+                    return (
+                      <MarkerF
+                        key={s.id}
+                        position={{ lat: s.coords.lat, lng: s.coords.lng }}
+                        icon={{ url: pinUrl }}
+                        onClick={() => { modifiedHandleBookFromList(s) }}
+                      />
+                    );
+                  })}
+                </GoogleMap>
+              ) : (
+                <div style={{ height: "100%", width: "100%", display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.1)' }}>Loading Map...</div>
+              )}
+            </div>
+
+            {/* Right Pane conditionally renders if selectedStationForPane exists */}
+            {selectedStationForPane && (
+              <StationDetailsPane
+                station={selectedStationForPane}
+                onClose={() => setSelectedStationForPane(null)}
+                onBook={openBooking}
+                onReportFault={(st) => {
+                  setFaultStation(st);
+                  setShowFaultModal(true);
+                }}
+              />
+            )}
+          </div>
+
+          <StatCards />
+          <NearbyStationsList stations={derivedStations} onSelect={(s) => modifiedHandleBookFromList(s)} />
+
+        </div>
+      </div>
+
+      {showFaultModal && faultStation && (
+        <FaultReportModal
+          stationId={faultStation.rawId || faultStation.id}
+          stationName={faultStation.name}
+          onClose={() => setShowFaultModal(false)}
+        />
+      )}
+
+      {/* Modern Booking Modal overlaps everything */}
       {showModal && selectedStation && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
           <div className="glass-panel w-full max-w-lg relative animate-float shadow-[0_0_50px_rgba(0,0,0,0.5)]">
             <div className="p-6 border-b border-white/10 flex justify-between items-center">
@@ -562,7 +665,6 @@ export default function Home() {
                       bookingSlotsList.map((sl) => {
                         const startTime = new Date(sl.start).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' });
                         const endTime = new Date(sl.end).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' });
-                        const label = sl.slotLabel || `${startTime} - ${endTime}`;
                         const isSelected = bookingSlot?.slotId === sl.slotId;
                         return (
                           <button

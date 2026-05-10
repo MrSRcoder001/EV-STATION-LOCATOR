@@ -55,6 +55,21 @@ const UserSchema = new mongoose.Schema({
     coordinates: { type: [Number], default: undefined } // [lng, lat]
   },
 
+  ecoStats: {
+    co2Saved: { type: Number, default: 0 },
+    fuelCostSaved: { type: Number, default: 0 }
+  },
+
+  walletBalance: {
+    type: Number,
+    default: 1000 // Initial dummy balance
+  },
+
+  isBlocked: {
+    type: Boolean,
+    default: false
+  },
+
   createdAt: {
     type: Date,
     default: Date.now

@@ -16,13 +16,20 @@ const StationSchema = new mongoose.Schema({
   chargers: [
     {
       type: { type: String }, // e.g. Fast, Normal, Slow, CCS2, Type2
-      count: { type: Number, default: 1 }
+      count: { type: Number, default: 1 },
+      isActive: { type: Boolean, default: true }
     }
   ],
   amenities: [{ type: String }],
   openTime: { type: String, default: '06:00' },
   closeTime: { type: String, default: '22:00' },
   pricePerKwh: { type: Number, default: 0 },
+  pricing: {
+    basePrice: { type: Number, default: 0 },
+    peakMultiplier: { type: Number, default: 1.5 } // Multiply price during peak hours
+  },
+  status: { type: String, enum: ['Active', 'Maintenance', 'Closed'], default: 'Active' },
+  isMaintenance: { type: Boolean, default: false },
   images: [{ type: String }],
   location: {
     type: { type: String, enum: ['Point'], default: 'Point' },

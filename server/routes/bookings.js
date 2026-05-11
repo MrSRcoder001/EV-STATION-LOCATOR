@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const Slot = require('../models/Slot');
 const Station = require('../models/Station');
 const Booking = require('../models/Booking');
+const User = require('../models/User');
+const WalletTransaction = require('../models/WalletTransaction');
 const auth = require('../middlewares/authMiddleware');
 
 const router = express.Router();
@@ -20,6 +22,10 @@ function emitToOwner(app, ownerId, event, payload) {
   } catch (e) {
     console.warn('emit failed', e?.message || e);
   }
+}
+
+function makeQrCode() {
+  return `EVQR-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 }
 
 /**
@@ -80,6 +86,7 @@ router.post('/', auth, async (req, res) => {
         userId,
         ownerId: station.ownerId,
         status: 'pending',
+        qrCode: makeQrCode(),
         meta: { chargerType: slot.chargerType, chargerIndex: slot.chargerIndex || 0, ...(meta || {}) }
       });
 
@@ -129,6 +136,7 @@ router.post('/', auth, async (req, res) => {
             userId,
             ownerId: station.ownerId,
             status: 'pending',
+            qrCode: makeQrCode(),
             meta: { chargerType: createdSlot.chargerType, chargerIndex: createdSlot.chargerIndex || 0, demoCreated: true, ...(meta || {}) }
           });
 
@@ -163,6 +171,7 @@ router.post('/', auth, async (req, res) => {
         userId,
         ownerId: null,
         status: 'pending',
+        qrCode: makeQrCode(),
         meta: {
           demoCreated: true,
           start: new Date(start),
@@ -223,7 +232,7 @@ router.get('/owner', auth, async (req, res) => {
 
     // Optimized query: Booking model has ownerId field
     const ownerBookings = await Booking.find({ ownerId: ownerId })
-      .populate('station')
+      .populate('stationId')
       .populate('userId', 'name email phone') // useful user info
       .populate('slotId')
       .sort({ createdAt: -1 });
@@ -270,23 +279,35 @@ router.post('/:id/pay', auth, async (req, res) => {
     const priceKwh = booking.stationId.pricePerKwh || 15;
     const kwhEstimate = amountToPay / priceKwh;
 
-    booking.paymentStatus = 'paid';
-    booking.amount = amountToPay;
-    booking.chargedKwh = kwhEstimate;
-    await booking.save();
-
     // Update user wallet & eco impact
-    const User = require('../models/User');
     const user = await User.findById(booking.userId);
     if (user) {
-      if (user.walletBalance >= amountToPay) {
-        user.walletBalance -= amountToPay;
+      if (String(user._id) !== String(req.user.id) && req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Not allowed to pay this booking' });
       }
+      if (user.walletBalance < amountToPay) {
+        return res.status(400).json({ message: 'Insufficient wallet balance' });
+      }
+      user.walletBalance -= amountToPay;
       if (!user.ecoStats) user.ecoStats = { co2Saved: 0, fuelCostSaved: 0 };
       user.ecoStats.co2Saved += (kwhEstimate * 0.85); // Dummy: 0.85 kg CO2 per kWh
       user.ecoStats.fuelCostSaved += (kwhEstimate * 5); // Dummy: $5 saved per kWh vs ICE
       await user.save();
+
+      await WalletTransaction.create({
+        userId: user._id,
+        bookingId: booking._id,
+        type: 'debit',
+        amount: amountToPay,
+        balanceAfter: user.walletBalance,
+        description: `Payment for booking ${booking._id}`
+      });
     }
+
+    booking.paymentStatus = 'paid';
+    booking.amount = amountToPay;
+    booking.chargedKwh = kwhEstimate;
+    await booking.save();
 
     res.json({ message: 'Payment successful', booking });
   } catch (err) {

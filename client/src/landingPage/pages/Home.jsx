@@ -17,6 +17,55 @@ const yellowIcon = "https://raw.githubusercontent.com/pointhi/leaflet-color-mark
 const defaultIcon = "http://maps.google.com/mapfiles/ms/icons/red-dot.png";
 const liveIconUrl = "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
 
+const normalizeSearchText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+const stationSearchText = (station) => {
+  const original = station?.original || {};
+  const address = original.address || {};
+
+  return normalizeSearchText([
+    station?.name,
+    station?.address,
+    address.fullAddress,
+    address.area,
+    address.village,
+    address.city,
+    address.pincode,
+    station?.connectors?.join(" "),
+  ].filter(Boolean).join(" "));
+};
+
+const areCoordsNear = (a, b, threshold = 40) => {
+  if (!a || !b) return false;
+  const R = 6371000;
+  const toRad = (v) => (v * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const aCalc = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(aCalc), Math.sqrt(1 - aCalc));
+  return R * c <= threshold;
+};
+
+const mergeStationLists = (...lists) => {
+  const merged = [];
+  const seen = new Set();
+
+  lists.flat().filter(Boolean).forEach((station) => {
+    const key = String(station.id || `${station.source}_${station.name}_${station.coords?.lat}_${station.coords?.lng}`);
+    const duplicate = seen.has(key) || merged.some((existing) => areCoordsNear(existing.coords, station.coords));
+    if (duplicate) return;
+
+    seen.add(key);
+    merged.push(station);
+  });
+
+  return merged;
+};
+
 
 // helper to format address object or string
 const formatAddress = (addr) => {
@@ -153,9 +202,9 @@ export default function Home() {
 
 
   // fetch OpenChargeMap stations
-  const fetchOcmStations = async (lat, lon) => {
+  const fetchOcmStations = async (lat, lon, distance = 10, maxresults = 10) => {
     try {
-      const url = `https://api.openchargemap.io/v3/poi/?output=json&latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&distance=10&maxresults=10&key=c4697cbb-0525-4304-aaf0-4a82496eb8e6`;
+      const url = `https://api.openchargemap.io/v3/poi/?output=json&latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&distance=${encodeURIComponent(distance)}&maxresults=${encodeURIComponent(maxresults)}&key=c4697cbb-0525-4304-aaf0-4a82496eb8e6`;
       const res = await fetch(url);
       const data = await res.json();
       return data.map((s, i) => mapOcmToUnified(s, i));
@@ -166,10 +215,10 @@ export default function Home() {
   };
 
   // fetch owner stations from DB (nearby)
-  const fetchDbStations = async (lat, lon) => {
+  const fetchDbStations = async (lat, lon, maxDistance = 10000) => {
     try {
       const res = await API.get('/stations/nearby', {
-        params: { lat, lng: lon, maxDistance: 10000 }
+        params: { lat, lng: lon, maxDistance }
       });
       return res.data.map((s) => mapDbStationToUnified(s));
     } catch (err) {
@@ -178,28 +227,26 @@ export default function Home() {
     }
   };
 
+  const getStationsNear = async (lat, lon, { dbMaxDistance = 10000, ocmDistance = 10, ocmMaxResults = 10 } = {}) => {
+    const [dbList, ocmList] = await Promise.all([
+      fetchDbStations(lat, lon, dbMaxDistance),
+      fetchOcmStations(lat, lon, ocmDistance, ocmMaxResults),
+    ]);
+
+    return mergeStationLists(dbList, ocmList);
+  };
+
   // merge DB + OCM, dedupe by proximity
   const fetchStations = async (lat, lon) => {
     try {
-      const [dbList, ocmList] = await Promise.all([
-        fetchDbStations(lat, lon),
-        fetchOcmStations(lat, lon),
-      ]);
-      const merged = [...dbList];
-      const isNear = (a, b, threshold = 40) => {
-        if (!a || !b) return false;
-        const R = 6371000;
-        const toRad = (v) => (v * Math.PI) / 180;
-        const dLat = toRad(b.lat - a.lat);
-        const dLon = toRad(b.lng - a.lng);
-        const aCalc = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-        const c = 2 * Math.atan2(Math.sqrt(aCalc), Math.sqrt(1 - aCalc));
-        const d = R * c;
-        return d <= threshold;
-      };
-      for (const o of ocmList) {
-        const duplicate = merged.some((m) => isNear(m.coords, o.coords, 40));
-        if (!duplicate) merged.push(o);
+      const nearbyStations = await getStationsNear(lat, lon);
+      const merged = [];
+
+      for (const station of nearbyStations) {
+        const duplicate = merged.some((m) =>
+          String(m.id) === String(station.id) || areCoordsNear(m.coords, station.coords)
+        );
+        if (!duplicate) merged.push(station);
       }
       setStations(merged);
     } catch (err) {
@@ -218,67 +265,77 @@ export default function Home() {
     if (!query || query.trim() === "")
       return toast.error("Enter a location to search");
 
-    const q = query.toLowerCase().trim();
+    const searchTerm = query.trim();
+    const q = normalizeSearchText(searchTerm);
+    let dbMatches = [];
+    let geoResult = null;
 
-    // 1. Priority: Local Match (indexOf name or address in current list)
-    let localMatch = stations.find(s =>
-      s.name.toLowerCase().indexOf(q) !== -1 ||
-      s.address.toLowerCase().indexOf(q) !== -1
-    );
+    const localMatches = stations.filter(s => stationSearchText(s).includes(q));
 
-    // 2. Database Search (Database-wide by name/address)
     try {
-      const dbRes = await API.get(`/stations/search`, { params: { q: query } });
-      const dbMatches = dbRes.data.map(mapDbStationToUnified);
-
-      if (dbMatches.length > 0) {
-        // Add new matches to stations if they don't exist
-        setStations(prev => {
-          const newOnes = dbMatches.filter(m => !prev.some(p => String(p.id) === String(m.id)));
-          return [...newOnes, ...prev];
-        });
-
-        // If no local match was found yet, use the first DB match
-        if (!localMatch) {
-          localMatch = dbMatches[0];
-        }
-      }
+      const dbRes = await API.get(`/stations/search`, { params: { q: searchTerm } });
+      dbMatches = dbRes.data.map(mapDbStationToUnified);
     } catch (e) {
       console.warn("DB search failed", e);
     }
 
-    if (localMatch && mapRef.current) {
-      if (mapRef.current) { mapRef.current.panTo({ lat: localMatch.coords.lat, lng: localMatch.coords.lng }); mapRef.current.setZoom(15); };
-      setActiveMarkerId(localMatch.id);
-
-      // Move localMatch to the top of the stations array for the sidebar
-      setStations(prev => {
-        const others = prev.filter(s => String(s.id) !== String(localMatch.id));
-        return [localMatch, ...others];
-      });
-
-      toast.success(`Focused: ${localMatch.name}`);
-      // return here if we found a direct match to avoid global map movement
-      return;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTerm)}&limit=1`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        geoResult = data[0];
+      }
+    } catch (err) {
+      console.error("Search geocoding error:", err);
     }
 
-    // 3. Global Geographic Search (Nominatim) fallback
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-      const data = await res.json();
+      let nearbyMatches = [];
 
-      if (Array.isArray(data) && data.length > 0) {
-        const { lat, lon, display_name } = data[0];
+      if (geoResult) {
+        const { lat, lon, display_name } = geoResult;
         const newLat = parseFloat(lat);
         const newLon = parseFloat(lon);
 
         setSearchMarker({ lat: newLat, lng: newLon, label: display_name });
 
-        if (mapRef.current) {
-          if (mapRef.current) { mapRef.current.panTo({ lat: newLat, lng: newLon }); mapRef.current.setZoom(13); };
+        nearbyMatches = await getStationsNear(newLat, newLon, {
+          dbMaxDistance: 50000,
+          ocmDistance: 25,
+          ocmMaxResults: 25,
+        });
+      } else {
+        setSearchMarker(null);
+      }
+
+      const combined = mergeStationLists(dbMatches, localMatches, nearbyMatches);
+      const exactOrNameMatch = combined.find((s) => normalizeSearchText(s.name).includes(q));
+      const focusStation = exactOrNameMatch || combined[0];
+
+      if (combined.length > 0) {
+        setStations(combined);
+
+        if (focusStation?.coords && mapRef.current) {
+          mapRef.current.panTo({ lat: focusStation.coords.lat, lng: focusStation.coords.lng });
+          mapRef.current.setZoom(exactOrNameMatch ? 15 : 12);
+          setActiveMarkerId(focusStation.id);
+        } else if (geoResult && mapRef.current) {
+          mapRef.current.panTo({ lat: parseFloat(geoResult.lat), lng: parseFloat(geoResult.lon) });
+          mapRef.current.setZoom(12);
         }
 
-        await fetchStations(newLat, newLon);
+        toast.success(`Showing ${combined.length} station${combined.length === 1 ? "" : "s"} for "${searchTerm}"`);
+      } else if (geoResult) {
+        const newLat = parseFloat(geoResult.lat);
+        const newLon = parseFloat(geoResult.lon);
+
+        if (mapRef.current) {
+          mapRef.current.panTo({ lat: newLat, lng: newLon });
+          mapRef.current.setZoom(12);
+        }
+
+        setStations([]);
+        toast.error("No stations found near this location");
       } else {
         toast.error("Location not found");
       }

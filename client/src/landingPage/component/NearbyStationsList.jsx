@@ -29,7 +29,7 @@ export default function NearbyStationsList({ stations, onSelect }) {
                             </div>
                         )}
                         <div className="w-24 h-full min-h-[100px] rounded-xl overflow-hidden shrink-0 bg-white/5 relative">
-                            <img src="https://images.unsplash.com/photo-1662993863777-2c1bccc2aeeb?q=80&w=200&auto=format&fit=crop" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                            <img src="https://images.unsplash.com/photo-1751553822264-47ef77e3495f?q=80&w=200&auto=format&fit=crop" alt={`${s.name} charging station`} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                         </div>
                         <div className="flex-1 flex flex-col justify-between py-1">
                             <div>

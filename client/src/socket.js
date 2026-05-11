@@ -7,8 +7,9 @@ export function connectSocket(token, user) {
 
   socket.on("connect", () => {
     console.log("Socket connected:", socket.id);
-    if (user && user._id) {
-      socket.emit("auth:join", { userId: user._id, role: user.role });
+    const userId = user?._id || user?.id;
+    if (userId) {
+      socket.emit("auth:join", { userId, role: user.role });
     }
   });
 

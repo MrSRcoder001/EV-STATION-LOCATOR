@@ -19,6 +19,90 @@ function emitToUser(app, userId, event, payload) {
 }
 
 /**
+ * GET /api/owner/bookings/analytics
+ * summarizes owner revenue, occupancy, station usage, and booking status.
+ */
+router.get('/analytics', auth, ownerMiddleware, async (req, res) => {
+  try {
+    const ownerId = req.user.id;
+    const stations = await Station.find({ ownerId }).lean();
+    const stationIds = stations.map((s) => s._id);
+    const stationMap = {};
+    stations.forEach((s) => {
+      stationMap[String(s._id)] = s.name;
+    });
+
+    const bookings = await Booking.find({ ownerId }).populate('slotId').lean();
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const slots = stationIds.length
+      ? await Slot.find({ stationId: { $in: stationIds }, start: { $gte: now, $lt: nextWeek } }).lean()
+      : [];
+
+    const statusCounts = bookings.reduce((acc, booking) => {
+      const status = booking.status || 'pending';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const hourlyUsage = Array.from({ length: 24 }, (_, hour) => ({ hour, bookings: 0 }));
+    const stationPerformance = {};
+    let revenue = 0;
+    let totalKwh = 0;
+
+    bookings.forEach((booking) => {
+      revenue += Number(booking.amount || 0);
+      totalKwh += Number(booking.chargedKwh || 0);
+
+      const start = booking.slotId?.start || booking.meta?.start || booking.createdAt;
+      const hour = new Date(start).getHours();
+      if (Number.isInteger(hour) && hourlyUsage[hour]) hourlyUsage[hour].bookings += 1;
+
+      const stationId = String(booking.stationId || '');
+      if (!stationPerformance[stationId]) {
+        stationPerformance[stationId] = {
+          stationId,
+          name: stationMap[stationId] || booking.meta?.stationName || 'Station',
+          bookings: 0,
+          revenue: 0,
+          kwh: 0,
+        };
+      }
+      stationPerformance[stationId].bookings += 1;
+      stationPerformance[stationId].revenue += Number(booking.amount || 0);
+      stationPerformance[stationId].kwh += Number(booking.chargedKwh || 0);
+    });
+
+    const totalSlots = slots.length;
+    const bookedSlots = slots.filter((slot) => slot.isBooked).length;
+    const availableSlots = totalSlots - bookedSlots;
+    const occupancyRate = totalSlots ? Math.round((bookedSlots / totalSlots) * 100) : 0;
+    const peakHour = hourlyUsage.reduce((peak, item) => item.bookings > peak.bookings ? item : peak, hourlyUsage[0]);
+
+    res.json({
+      stations: stations.length,
+      chargers: stations.reduce((sum, station) => sum + (station.chargers || []).reduce((n, charger) => n + Number(charger.count || charger.chargerCount || 1), 0), 0),
+      bookings: bookings.length,
+      pendingBookings: statusCounts.pending || 0,
+      acceptedBookings: statusCounts.accepted || 0,
+      revenue,
+      totalKwh,
+      totalSlots,
+      bookedSlots,
+      availableSlots,
+      occupancyRate,
+      peakHour,
+      statusCounts,
+      hourlyUsage,
+      stationPerformance: Object.values(stationPerformance).sort((a, b) => b.revenue - a.revenue),
+    });
+  } catch (err) {
+    console.error('Owner analytics error', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
  * GET /api/owner/bookings
  * returns bookings for stations owned by logged-in owner
  */

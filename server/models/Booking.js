@@ -9,6 +9,13 @@ const BookingSchema = new mongoose.Schema({
   paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded'], default: 'pending' },
   amount: { type: Number, default: 0 },
   chargedKwh: { type: Number, default: 0 },
+  qrCode: { type: String, unique: true, sparse: true },
+  checkInAt: { type: Date },
+  sessionStartedAt: { type: Date },
+  sessionEndedAt: { type: Date },
+  meterStartKwh: { type: Number, default: 0 },
+  meterCurrentKwh: { type: Number, default: 0 },
+  meterEndKwh: { type: Number, default: 0 },
   meta: { type: Object, default: {} },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }

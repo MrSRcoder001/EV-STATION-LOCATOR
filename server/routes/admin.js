@@ -5,10 +5,12 @@ const auth = require('../middlewares/authMiddleware');
 const User = require('../models/User');
 const Station = require('../models/Station');
 const Booking = require('../models/Booking');
+const FaultReport = require('../models/FaultReport');
+const EmergencyRequest = require('../models/EmergencyRequest');
 
 // Simple admin middleware
 const adminMiddleware = (req, res, next) => {
-    if (req.user && (req.user.role === 'admin' || req.user.role === 'owner')) {
+    if (req.user && req.user.role === 'admin') {
         next();
     } else {
         res.status(403).json({ message: 'Access denied. Admin only.' });
@@ -54,12 +56,16 @@ router.get('/analytics', async (req, res) => {
         ]);
 
         // Faults count
-        const FaultReport = require('../models/FaultReport');
         const faultsCount = await FaultReport.countDocuments({ status: { $ne: 'Resolved' } });
+        const carbonResult = await Booking.aggregate([
+            { $match: { paymentStatus: 'paid' } },
+            { $group: { _id: null, co2SavedKg: { $sum: { $multiply: ['$chargedKwh', 0.85] } } } }
+        ]);
 
         res.json({
             revenue: revenueResult[0] ? revenueResult[0].totalRevenue : 0,
             totalKwh: revenueResult[0] ? revenueResult[0].totalKwh : 0,
+            co2SavedKg: carbonResult[0] ? carbonResult[0].co2SavedKg : 0,
             bookingsByStatus: bookingsStatus,
             activeFaults: faultsCount
         });
@@ -67,6 +73,53 @@ router.get('/analytics', async (req, res) => {
         console.error('Admin analytics error:', err);
         res.status(500).json({ message: 'Server error on analytics endpoint', error: err.message });
     }
+});
+
+// GET /api/admin/owners/pending
+router.get('/owners/pending', async (req, res) => {
+    const owners = await User.find({
+        role: 'owner',
+        'ownerVerification.status': { $in: ['pending', 'not_submitted'] }
+    }).select('-passwordHash').sort({ createdAt: -1 });
+    res.json(owners);
+});
+
+// PUT /api/admin/owners/:id/verification
+router.put('/owners/:id/verification', async (req, res) => {
+    const { status, rejectionReason = '' } = req.body;
+    if (!['verified', 'rejected', 'pending'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid verification status' });
+    }
+    const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+    if (!owner) return res.status(404).json({ message: 'Owner not found' });
+    owner.ownerVerification = {
+        ...(owner.ownerVerification || {}),
+        status,
+        rejectionReason,
+        reviewedAt: new Date(),
+        reviewedBy: req.user.id
+    };
+    await owner.save();
+    res.json({ message: `Owner ${status}`, owner });
+});
+
+// PUT /api/admin/stations/:id/approval
+router.put('/stations/:id/approval', async (req, res) => {
+    const { status, notes = '', fraudRiskScore } = req.body;
+    if (!['pending', 'approved', 'rejected', 'flagged'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid approval status' });
+    }
+    const station = await Station.findById(req.params.id);
+    if (!station) return res.status(404).json({ message: 'Station not found' });
+    station.approvalStatus = status;
+    station.approvalNotes = notes;
+    station.fraudRiskScore = fraudRiskScore !== undefined ? Number(fraudRiskScore) : station.fraudRiskScore;
+    if (status === 'approved') {
+        station.approvedAt = new Date();
+        station.approvedBy = req.user.id;
+    }
+    await station.save();
+    res.json({ message: `Station ${status}`, station });
 });
 
 // GET /api/admin/users
@@ -110,12 +163,65 @@ router.put('/users/:id/block', async (req, res) => {
         if (!user) return res.status(404).json({ message: 'User not found' });
         if (user.role === 'admin') return res.status(400).json({ message: 'Cannot block admin' });
 
-        user.isBlocked = !user.isBlocked;
+        user.isBlocked = req.body.isBlocked !== undefined ? Boolean(req.body.isBlocked) : !user.isBlocked;
+        user.blockedReason = req.body.reason || user.blockedReason || '';
         await user.save();
         res.json({ message: user.isBlocked ? 'User blocked' : 'User unblocked', user });
     } catch (err) {
         res.status(500).json({ message: 'Server error on blocking user' });
     }
+});
+
+router.get('/complaints', async (req, res) => {
+    const complaints = await FaultReport.find()
+        .populate('userId', 'name email phone')
+        .populate('stationId', 'name address ownerId')
+        .sort({ createdAt: -1 })
+        .limit(200);
+    res.json(complaints);
+});
+
+router.put('/complaints/:id', async (req, res) => {
+    const complaint = await FaultReport.findById(req.params.id);
+    if (!complaint) return res.status(404).json({ message: 'Complaint not found' });
+    if (req.body.status) complaint.status = req.body.status;
+    if (req.body.adminNotes !== undefined) complaint.adminNotes = req.body.adminNotes;
+    await complaint.save();
+    res.json(complaint);
+});
+
+router.get('/emergency', async (req, res) => {
+    const requests = await EmergencyRequest.find()
+        .populate('userId', 'name phone email')
+        .populate('stationId', 'name address')
+        .sort({ createdAt: -1 })
+        .limit(200);
+    res.json(requests);
+});
+
+router.get('/reports/summary', async (req, res) => {
+    const [users, owners, stations, approvedStations, bookings, paid] = await Promise.all([
+        User.countDocuments({ role: 'user' }),
+        User.countDocuments({ role: 'owner' }),
+        Station.countDocuments(),
+        Station.countDocuments({ approvalStatus: 'approved' }),
+        Booking.countDocuments(),
+        Booking.aggregate([
+            { $match: { paymentStatus: 'paid' } },
+            { $group: { _id: null, revenue: { $sum: '$amount' }, kwh: { $sum: '$chargedKwh' } } }
+        ])
+    ]);
+    res.json({
+        generatedAt: new Date(),
+        users,
+        owners,
+        stations,
+        approvedStations,
+        bookings,
+        revenue: paid[0]?.revenue || 0,
+        kwh: paid[0]?.kwh || 0,
+        co2SavedKg: (paid[0]?.kwh || 0) * 0.85
+    });
 });
 
 // PUT /api/admin/bookings/:id/force-stop

@@ -9,7 +9,7 @@ const Notification = require('../models/Notification');
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const notifications = await Notification.find({
-            $or: [{ userId: req.user.userId }, { userId: null }]
+            $or: [{ userId: req.user.id }, { userId: null }]
         }).sort({ createdAt: -1 }).limit(20);
         res.json(notifications);
     } catch (error) {
@@ -23,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.put('/:id/read', authMiddleware, async (req, res) => {
     try {
         const notification = await Notification.findOneAndUpdate(
-            { _id: req.params.id, userId: req.user.userId },
+            { _id: req.params.id, userId: req.user.id },
             { read: true },
             { new: true }
         );

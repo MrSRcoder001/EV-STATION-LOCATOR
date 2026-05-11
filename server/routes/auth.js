@@ -82,7 +82,8 @@ router.post(
         phone,
         alternatePhone,
         passwordHash,
-        role: role === 'owner' ? 'owner' : 'user'
+        role: role === 'owner' ? 'owner' : 'user',
+        ownerVerification: role === 'owner' ? { status: 'pending', submittedAt: new Date() } : undefined
       };
 
       // Only add station details if they are provided
@@ -133,6 +134,7 @@ router.post(
             name: user.stationName,
             address: user.stationAddress,
             location: user.stationLocation,
+            approvalStatus: 'pending',
             type: 'Public',
             chargers: [{ type: 'Normal', count: 1 }],
             openTime: '06:00',
@@ -209,6 +211,9 @@ router.post('/login', async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
+    if (user.isBlocked) {
+      return res.status(403).json({ message: 'Account blocked. Please contact support.' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
@@ -233,6 +238,24 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ */
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-passwordHash');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.isBlocked) return res.status(403).json({ message: 'Account blocked' });
+    res.json({ user });
+  } catch (err) {
+    res.status(401).json({ message: 'Invalid token' });
   }
 });
 
@@ -274,6 +297,38 @@ router.put('/update-profile', async (req, res) => {
 
   } catch (err) {
     console.error('Update profile error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * PUT /api/auth/owner-verification
+ * Owner submits or updates verification document references.
+ */
+router.put('/owner-verification', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'No token' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role !== 'owner') return res.status(403).json({ message: 'Owner account required' });
+
+    user.ownerVerification = {
+      ...(user.ownerVerification || {}),
+      status: 'pending',
+      documents: {
+        ...(user.ownerVerification?.documents || {}),
+        ...(req.body.documents || {})
+      },
+      submittedAt: new Date(),
+      rejectionReason: ''
+    };
+    await user.save();
+
+    res.json({ message: 'Verification submitted', ownerVerification: user.ownerVerification });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });

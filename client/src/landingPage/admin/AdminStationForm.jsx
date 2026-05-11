@@ -1,7 +1,7 @@
 // client/src/landingPage/owner/StationForm.jsx
 import React, { useEffect, useState } from "react";
 import API from "../../api";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { GoogleMap, MarkerF, useJsApiLoader } from "@react-google-maps/api";
 import toast from 'react-hot-toast';
 export default function AdminStationForm() {
@@ -9,6 +9,8 @@ export default function AdminStationForm() {
   const { id } = useParams();
   const editMode = !!id;
   const navigate = useNavigate();
+  const location = useLocation();
+  const stationBasePath = location.pathname.startsWith('/owner') ? '/owner/stations' : '/admin/stations';
 
   const [form, setForm] = useState({
     name: "",
@@ -66,7 +68,7 @@ export default function AdminStationForm() {
             chargers: s.chargers?.length ? s.chargers.map(c => ({
               type: c.type || "AC",
               powerKw: c.powerKw ?? "",
-              chargerCount: c.chargerCount ?? 1,
+              chargerCount: c.count ?? c.chargerCount ?? 1,
               pricePerKwh: c.pricePerKwh ?? "",
               isActive: c.isActive ?? true
             })) : [{ type: "AC", powerKw: "", chargerCount: 1, pricePerKwh: "", isActive: true }],
@@ -74,13 +76,13 @@ export default function AdminStationForm() {
           });
         } catch (err) {
           toast.error("Failed to load station");
-          navigate("/admin/stations");
+          navigate(stationBasePath);
         } finally {
           setLoading(false);
         }
       })();
     }
-  }, [id, editMode, navigate]);
+  }, [id, editMode, navigate, stationBasePath]);
 
   function onChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -156,6 +158,7 @@ export default function AdminStationForm() {
       setLoading(true);
       const payload = {
         ...form,
+        lat: Number(form.lat),
         lng: Number(form.lng),
         pricing: {
           basePrice: Number(form.basePrice) || 0,
@@ -177,7 +180,7 @@ export default function AdminStationForm() {
         await API.post("/owner/stations", payload);
         toast.success("Property registered successfully");
       }
-      navigate("/admin/stations");
+      navigate(stationBasePath);
     } catch (err) {
       toast.error("Save failed");
     } finally {
@@ -383,7 +386,7 @@ export default function AdminStationForm() {
 
         {/* Final Actions */}
         <div className="flex gap-4 pt-10 border-t border-white/5">
-          <button type="button" onClick={() => navigate("/admin/stations")} className="glass-btn flex-1 py-4 font-bold uppercase tracking-widest text-xs">Cancel</button>
+          <button type="button" onClick={() => navigate(stationBasePath)} className="glass-btn flex-1 py-4 font-bold uppercase tracking-widest text-xs">Cancel</button>
           <button className="glass-btn-primary flex-[2] py-4 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 disabled:grayscale disabled:opacity-50" disabled={loading}>
             {loading ? "Processing..." : editMode ? "Save Settings" : "Register Station"}
           </button>

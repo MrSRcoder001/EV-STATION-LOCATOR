@@ -18,6 +18,10 @@ const adminRoutes = require('./routes/admin');
 const ecoRoutes = require('./routes/eco');
 const faultsRoutes = require('./routes/faults');
 const notificationsRoutes = require('./routes/notifications');
+const reviewsRoutes = require('./routes/reviews');
+const walletRoutes = require('./routes/wallet');
+const sessionsRoutes = require('./routes/sessions');
+const emergencyRoutes = require('./routes/emergency');
 
 app.use(cors());
 app.use(express.json());
@@ -30,6 +34,10 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/eco', ecoRoutes);
 app.use('/api/faults', faultsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api', reviewsRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/sessions', sessionsRoutes);
+app.use('/api/emergency', emergencyRoutes);
 
 app.use('/api', slotsRoutes);
 

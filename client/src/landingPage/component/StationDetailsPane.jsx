@@ -8,7 +8,7 @@ export default function StationDetailsPane({ station, onClose, onBook }) {
             <button className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/80 z-10 backdrop-blur-md" onClick={onClose}>✕</button>
 
             <div className="h-48 w-full relative bg-white/5 shrink-0 overflow-hidden rounded-t-2xl">
-                <img src="https://images.unsplash.com/photo-1662993863777-2c1bccc2aeeb?q=80&w=600&auto=format&fit=crop" alt="station" className="w-full h-full object-cover" />
+                <img src="https://images.unsplash.com/photo-1751553822264-47ef77e3495f?q=80&w=600&auto=format&fit=crop" alt="station" className="w-full h-full object-cover" />
                 <div className="absolute bottom-2 right-2 bg-black/60 px-2 py-1 rounded-lg backdrop-blur-sm shadow-md text-xs font-bold text-primary-light flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
                     Available

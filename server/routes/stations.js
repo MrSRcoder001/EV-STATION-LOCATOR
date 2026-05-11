@@ -25,6 +25,10 @@ function validateLatLng(lat, lng) {
   );
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * GET /api/stations/nearby?lat=&lng=&maxDistance=5000
  * Returns nearby stations from DB (owner stations). Adds availableSlots count (free future slots).
@@ -43,6 +47,8 @@ router.get('/nearby', async (req, res) => {
     }
 
     const query = {
+      $or: [{ approvalStatus: 'approved' }, { approvalStatus: { $exists: false } }],
+      status: { $ne: 'Closed' },
       location: {
         $near: {
           $geometry: { type: "Point", coordinates: [longitude, latitude] },
@@ -104,6 +110,53 @@ router.get('/nearby', async (req, res) => {
   } catch (err) {
     console.error('nearby error', err && err.stack ? err.stack : err);
     res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * GET /api/stations/search?q=...
+ * Database-wide search by station name, city, nearby address fields, contact, or charger type.
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const search = String(q || '').trim();
+    if (!search) return res.status(400).json({ message: 'Search query required' });
+
+    const regex = new RegExp(escapeRegex(search), 'i');
+
+    const stations = await Station.find({
+      $or: [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { 'address.fullAddress': regex },
+        { 'address.city': regex },
+        { 'address.area': regex },
+        { 'address.village': regex },
+        { 'address.pincode': regex },
+        { 'chargers.type': regex }
+      ]
+    }).limit(100).lean();
+
+    const now = new Date();
+    const result = await Promise.all(stations.map(async (s) => {
+      try {
+        const freeCount = await Slot.countDocuments({
+          stationId: s._id,
+          isBooked: false,
+          start: { $gte: now }
+        });
+        return { ...s, availableSlots: freeCount };
+      } catch (e) {
+        return { ...s, availableSlots: 0 };
+      }
+    }));
+
+    res.json(result);
+  } catch (err) {
+    console.error('search error', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -181,6 +234,8 @@ router.post(
         phone: String(phone || ''),
         email: String(email || ''),
         type: req.body.type || 'Public',
+        approvalStatus: req.user.role === 'admin' ? 'approved' : 'pending',
+        fraudRiskScore: Number(req.body.fraudRiskScore || 0),
         pricePerKwh: pricePerKwh !== undefined ? Number(pricePerKwh) : 0,
         openTime: openTime || '06:00',
         closeTime: closeTime || '22:00',
@@ -290,7 +345,7 @@ router.put('/:id', auth, owner, async (req, res) => {
     const {
       name, address, phone, lng, lat, chargers,
       pricePerKwh, openTime, closeTime,
-      amenities, email, images
+      amenities, email, images, status, isMaintenance, dynamicPricing
     } = req.body;
 
     if (name !== undefined) station.name = name;
@@ -306,6 +361,14 @@ router.put('/:id', auth, owner, async (req, res) => {
     if (phone !== undefined) station.phone = phone;
     if (email !== undefined) station.email = email;
     if (pricePerKwh !== undefined) station.pricePerKwh = Number(pricePerKwh);
+    if (status !== undefined) station.status = status;
+    if (isMaintenance !== undefined) station.isMaintenance = Boolean(isMaintenance);
+    if (dynamicPricing !== undefined) {
+      station.dynamicPricing = {
+        ...station.dynamicPricing,
+        ...dynamicPricing
+      };
+    }
     if (openTime !== undefined) station.openTime = openTime;
     if (closeTime !== undefined) station.closeTime = closeTime;
     if (amenities !== undefined) station.amenities = Array.isArray(amenities) ? amenities : station.amenities;
@@ -342,11 +405,40 @@ router.delete('/:id', auth, async (req, res) => {
     }
     const station = await Station.findById(req.params.id);
     if (!station) return res.status(404).json({ message: 'Station not found' });
-    // Optionally check ownership
+
+    if (String(station.ownerId) !== String(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not allowed' });
+    }
+
     await station.deleteOne();
     res.json({ message: 'Station deleted' });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/**
+ * PUT /api/owner/stations/:id/chargers/:chargerIndex/status
+ * Owner/admin toggles one charger online/offline.
+ */
+router.put('/:id/chargers/:chargerIndex/status', auth, owner, async (req, res) => {
+  try {
+    const station = await Station.findById(req.params.id);
+    if (!station) return res.status(404).json({ message: 'Station not found' });
+    if (String(station.ownerId) !== String(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Not allowed' });
+    }
+    const index = Number(req.params.chargerIndex);
+    if (!Number.isInteger(index) || !station.chargers[index]) {
+      return res.status(400).json({ message: 'Invalid charger index' });
+    }
+    station.chargers[index].isActive = Boolean(req.body.isActive);
+    await station.save();
+    const io = req.app.get('io');
+    if (io) io.emit('station:availability', { stationId: station._id, chargers: station.chargers });
+    res.json(station);
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -545,49 +637,6 @@ router.get('/:id/owner-slots', async (req, res) => {
     res.json(enrichedSlots);
   } catch (err) {
     console.error('owner-slots error', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-/**
- * GET /api/stations/search?q=...
- * Database-wide search by station name or address (fullAddress).
- */
-router.get('/search', async (req, res) => {
-  try {
-    const { q } = req.query;
-    if (!q) return res.status(400).json({ message: 'Search query required' });
-
-    const regex = new RegExp(q, 'i');
-
-    // Search by name or fullAddress
-    const stations = await Station.find({
-      $or: [
-        { name: regex },
-        { 'address.fullAddress': regex },
-        { 'address.city': regex },
-        { 'address.area': regex }
-      ]
-    }).limit(20).lean();
-
-    // compute availableSlots for each station
-    const now = new Date();
-    const result = await Promise.all(stations.map(async (s) => {
-      try {
-        const freeCount = await Slot.countDocuments({
-          stationId: s._id,
-          isBooked: false,
-          start: { $gte: now }
-        });
-        return { ...s, availableSlots: freeCount };
-      } catch (e) {
-        return { ...s, availableSlots: 0 };
-      }
-    }));
-
-    res.json(result);
-  } catch (err) {
-    console.error('search error', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

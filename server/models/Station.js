@@ -29,6 +29,24 @@ const StationSchema = new mongoose.Schema({
     peakMultiplier: { type: Number, default: 1.5 } // Multiply price during peak hours
   },
   status: { type: String, enum: ['Active', 'Maintenance', 'Closed'], default: 'Active' },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected', 'flagged'],
+    default: 'pending'
+  },
+  approvalNotes: { type: String, default: '' },
+  approvedAt: { type: Date },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  fraudRiskScore: { type: Number, default: 0 },
+  ratingAverage: { type: Number, default: 0 },
+  reviewCount: { type: Number, default: 0 },
+  dynamicPricing: {
+    enabled: { type: Boolean, default: false },
+    peakStart: { type: String, default: '18:00' },
+    peakEnd: { type: String, default: '22:00' },
+    minPrice: { type: Number, default: 0 },
+    maxPrice: { type: Number, default: 0 }
+  },
   isMaintenance: { type: Boolean, default: false },
   images: [{ type: String }],
   location: {

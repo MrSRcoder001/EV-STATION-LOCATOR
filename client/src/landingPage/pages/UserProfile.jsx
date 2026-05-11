@@ -91,11 +91,50 @@ export default function UserProfile() {
     }
   }
 
+  async function payBooking(id) {
+    const value = window.prompt("Enter amount to pay", "150");
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid amount");
+    try {
+      const res = await API.post(`/bookings/${id}/pay`, { amount });
+      setBookings(prev => prev.map(b => String(b._id) === String(id) ? res.data.booking : b));
+      toast.success("Payment successful");
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Payment failed");
+    }
+  }
+
+  async function checkInBooking(booking) {
+    const qrCode = window.prompt("Enter or scan booking QR code", booking.qrCode || "");
+    if (!qrCode) return;
+    try {
+      const res = await API.post("/sessions/check-in", { bookingId: booking._id, qrCode });
+      setBookings(prev => prev.map(b => String(b._id) === String(booking._id) ? res.data.booking : b));
+      toast.success("Charging session started");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Check-in failed");
+    }
+  }
+
+  async function completeSession(booking) {
+    const meterEndKwh = Number(window.prompt("Final meter kWh", String(booking.meterCurrentKwh || booking.meterStartKwh || 0)));
+    if (!Number.isFinite(meterEndKwh)) return toast.error("Enter a valid meter reading");
+    try {
+      const res = await API.put(`/sessions/${booking._id}/complete`, { meterEndKwh });
+      setBookings(prev => prev.map(b => String(b._id) === String(booking._id) ? res.data.booking : b));
+      toast.success("Session completed");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Unable to complete session");
+    }
+  }
+
   function getStatusStyle(status) {
     const s = String(status || "").toLowerCase();
     switch (s) {
       case "pending": return "bg-yellow-500/20 text-yellow-500 border-yellow-500/30";
       case "accepted": return "bg-green-500/20 text-green-500 border-green-500/30";
+      case "active": return "bg-blue-500/20 text-blue-400 border-blue-500/30";
       case "rejected": return "bg-red-500/20 text-red-500 border-red-500/30";
       case "completed": return "bg-primary/20 text-primary-light border-primary/30";
       case "cancelled": return "bg-white/10 text-white/40 border-white/10";
@@ -240,7 +279,7 @@ export default function UserProfile() {
                           <div className="text-[10px] text-white/40 font-mono mt-0.5">{new Date(b.slotId?.start || b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </td>
                         <td className="py-4 text-right">
-                          <span className="font-mono font-black text-lg text-white group-hover:text-primary-light transition-colors drop-shadow-md">₹{b.price || "—"}</span>
+                          <span className="font-mono font-black text-lg text-white group-hover:text-primary-light transition-colors drop-shadow-md">₹{b.amount || "—"}</span>
                         </td>
                         <td className="py-4 text-center">
                           <span className={`px-3 py-1 rounded-lg border text-[10px] font-black tracking-widest uppercase inline-block shadow-sm ${getStatusStyle(b.status)}`}>
@@ -255,8 +294,29 @@ export default function UserProfile() {
                             >
                               Cancel
                             </button>
+                          ) : String(b.paymentStatus).toLowerCase() !== 'paid' && ['accepted', 'active'].includes(String(b.status).toLowerCase()) ? (
+                            <button
+                              className="text-[10px] font-bold text-primary-light hover:text-slate-950 bg-primary/10 hover:bg-primary border border-primary/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter shadow-md active:scale-95"
+                              onClick={() => payBooking(b._id)}
+                            >
+                              Pay
+                            </button>
+                          ) : String(b.status).toLowerCase() === 'accepted' ? (
+                            <button
+                              className="text-[10px] font-bold text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500 border border-blue-500/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter shadow-md active:scale-95"
+                              onClick={() => checkInBooking(b)}
+                            >
+                              Check In
+                            </button>
+                          ) : String(b.status).toLowerCase() === 'active' ? (
+                            <button
+                              className="text-[10px] font-bold text-green-300 hover:text-white bg-green-500/10 hover:bg-green-500 border border-green-500/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter shadow-md active:scale-95"
+                              onClick={() => completeSession(b)}
+                            >
+                              Complete
+                            </button>
                           ) : (
-                            <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">—</span>
+                            <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">{b.qrCode || "—"}</span>
                           )}
                         </td>
                       </tr>

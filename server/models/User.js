@@ -65,9 +65,32 @@ const UserSchema = new mongoose.Schema({
     default: 1000 // Initial dummy balance
   },
 
+  ownerVerification: {
+    status: {
+      type: String,
+      enum: ['not_submitted', 'pending', 'verified', 'rejected'],
+      default: 'not_submitted'
+    },
+    documents: {
+      governmentId: { type: String, default: '' },
+      businessLicense: { type: String, default: '' },
+      electricityBill: { type: String, default: '' },
+      gstNumber: { type: String, default: '' }
+    },
+    submittedAt: { type: Date },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    rejectionReason: { type: String, default: '' }
+  },
+
   isBlocked: {
     type: Boolean,
     default: false
+  },
+
+  blockedReason: {
+    type: String,
+    default: ''
   },
 
   createdAt: {

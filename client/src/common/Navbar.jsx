@@ -7,15 +7,14 @@ const AppNavbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Do not render global Navbar for Admin routes (Admin has its own layout)
-  if (location.pathname.startsWith('/admin')) return null;
-
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState(null);
 
   const isActive = (path) => location.pathname === path;
+  const dashboardPath = userRole === "admin" ? "/admin/dashboard" : userRole === "owner" ? "/owner/dashboard" : "/home";
+  const dashboardLabel = userRole === "admin" ? "Admin Dashboard" : userRole === "owner" ? "Owner Dashboard" : "Dashboard";
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -81,7 +80,7 @@ const AppNavbar = () => {
             <>
               {userRole === "admin" || userRole === "owner" ? (
                 <>
-                  <li><Link to="/admin/dashboard" className={`text-sm font-bold hover:text-primary-light ${isActive("/admin/dashboard") ? "text-primary-light text-glow-primary" : "text-white/60"}`}>Admin Dashboard</Link></li>
+                  <li><Link to={dashboardPath} className={`text-sm font-bold hover:text-primary-light ${isActive(dashboardPath) ? "text-primary-light text-glow-primary" : "text-white/60"}`}>{dashboardLabel}</Link></li>
                 </>
               ) : (
                 <>
@@ -129,7 +128,7 @@ const AppNavbar = () => {
             <>
               {userRole === "admin" || userRole === "owner" ? (
                 <>
-                  <li><Link to="/admin/dashboard" className={`text-2xl font-black ${isActive("/admin/dashboard") ? "text-primary" : "text-white"}`}>Admin Dashboard</Link></li>
+                  <li><Link to={dashboardPath} className={`text-2xl font-black ${isActive(dashboardPath) ? "text-primary" : "text-white"}`}>{dashboardLabel}</Link></li>
                 </>
               ) : (
                 <>

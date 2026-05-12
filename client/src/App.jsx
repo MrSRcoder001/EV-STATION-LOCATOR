@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Home from "./landingPage/pages/Home";
 import Navbar from "./common/Navbar";
 import { Toaster } from 'react-hot-toast';
@@ -22,7 +22,44 @@ import OwnerAnalytics from "./landingPage/owner/OwnerAnalytics";
 
 import { connectSocket } from "./socket";
 
-import { useLocation } from "react-router-dom";
+function getStoredAuth() {
+  const token = localStorage.getItem("token");
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem("user") || "null");
+  } catch {
+    user = null;
+  }
+  return { token, user };
+}
+
+function roleHome(role) {
+  if (role === "admin") return "/admin/dashboard";
+  if (role === "owner") return "/owner/dashboard";
+  return "/home";
+}
+
+function RequireAuth({ children, roles }) {
+  const location = useLocation();
+  const { token, user } = getStoredAuth();
+  const role = user?.role;
+
+  if (!token || !user) {
+    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+  }
+
+  if (roles?.length && !roles.includes(role)) {
+    return <Navigate to={roleHome(role)} replace />;
+  }
+
+  return children;
+}
+
+function GuestOnly({ children }) {
+  const { token, user } = getStoredAuth();
+  if (token && user) return <Navigate to={roleHome(user.role)} replace />;
+  return children;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -36,12 +73,12 @@ function AppContent() {
       <div className={isConsole ? "min-h-screen" : "pt-24 min-h-[calc(100vh-80px)]"}>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/profile" element={<UserProfile />} />
+          <Route path="/home" element={<RequireAuth roles={["user"]}><Home /></RequireAuth>} />
+          <Route path="/auth" element={<GuestOnly><AuthPage /></GuestOnly>} />
+          <Route path="/profile" element={<RequireAuth roles={["user"]}><UserProfile /></RequireAuth>} />
 
           {/* Admin routes nested under AdminLayout */}
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin" element={<RequireAuth roles={["admin"]}><AdminLayout /></RequireAuth>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
@@ -55,7 +92,7 @@ function AppContent() {
             <Route path="settings" element={<AdminDashboard />} />
           </Route>
 
-          <Route path="/owner" element={<OwnerLayout />}>
+          <Route path="/owner" element={<RequireAuth roles={["owner"]}><OwnerLayout /></RequireAuth>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OwnerDashboard />} />
             <Route path="stations" element={<OwnerStations />} />

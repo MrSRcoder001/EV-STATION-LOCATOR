@@ -1,5 +1,5 @@
 // client/src/landingPage/Auth/AuthPage.jsx
-import React, { useState, } from "react";
+import React, { useEffect, useState, } from "react";
 import API from "../../api";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
@@ -20,6 +20,22 @@ export default function AuthPage() {
 
   const [role, setRole] = useState("user");
 
+  const routeForRole = (nextRole) => {
+    if (nextRole === "admin") return "/admin/dashboard";
+    if (nextRole === "owner") return "/owner/dashboard";
+    return "/home";
+  };
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem("token");
+      const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+      if (token && storedUser?.role) navigate(routeForRole(storedUser.role), { replace: true });
+    } catch {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    }
+  }, [navigate]);
 
   function onChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -61,8 +77,7 @@ export default function AuthPage() {
       // Connect socket on signup
       import("../../socket").then(m => m.connectSocket(res.data.token, res.data.user));
 
-      if (role === "owner") navigate("/owner/dashboard");
-      else navigate("/home");
+      navigate(routeForRole(res?.data?.user?.role || role), { replace: true });
       toast.success("Welcome aboard!");
     } catch (err) {
       toast.error(err?.response?.data?.message || err?.response?.data?.errors?.[0]?.msg || "Signup failed");
@@ -86,9 +101,7 @@ export default function AuthPage() {
       import("../../socket").then(m => m.connectSocket(res.data.token, res.data.user));
 
       const roleFromServer = res?.data?.user?.role;
-      if (roleFromServer === "admin") navigate("/admin/dashboard");
-      else if (roleFromServer === "owner") navigate("/owner/dashboard");
-      else navigate("/home");
+      navigate(routeForRole(roleFromServer), { replace: true });
       toast.success("Logged in successfully");
     } catch (err) {
       toast.error(err?.response?.data?.message || "Login failed");

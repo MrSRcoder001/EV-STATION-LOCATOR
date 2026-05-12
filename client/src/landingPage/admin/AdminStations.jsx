@@ -32,9 +32,28 @@ export default function AdminStations() {
         }
     };
 
+    const reviewStation = async (station, status) => {
+        try {
+            const notes = status === 'rejected' || status === 'flagged'
+                ? window.prompt('Review note', status === 'flagged' ? 'Suspicious station details' : 'Station details rejected')
+                : 'Approved by admin';
+            const res = await API.put(`/admin/stations/${station._id}/approval`, { status, notes });
+            setStations((prev) => prev.map((item) => item._id === station._id ? res.data.station : item));
+            toast.success(`Station ${status}`);
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Station review failed');
+        }
+    };
+
     const glassWidget = "glass-panel p-6 rounded-2xl border border-white/10 relative overflow-hidden";
     const headerTitle = "text-lg font-bold text-white mb-6 tracking-wide";
     const safeString = (val) => String(val || "-");
+    const stationAddress = (station) => {
+        const address = station?.address;
+        if (!address) return "-";
+        if (typeof address === "string") return address;
+        return [address.fullAddress, address.area, address.city, address.pincode].filter(Boolean).join(", ") || "-";
+    };
 
     return (
         <div className="space-y-6">
@@ -57,7 +76,7 @@ export default function AdminStations() {
                                 <th className="pb-4 font-bold">Owner / Provider</th>
                                 <th className="pb-4 font-bold text-center">Connectors</th>
                                 <th className="pb-4 font-bold text-center">Added On</th>
-                                <th className="pb-4 font-bold text-center">Status</th>
+                                <th className="pb-4 font-bold text-center">Approval</th>
                                 <th className="pb-4 font-bold text-right pr-4">Actions</th>
                             </tr>
                         </thead>
@@ -68,35 +87,44 @@ export default function AdminStations() {
                             {loading && (
                                 <tr><td colSpan="7" className="text-center py-12 text-white/40">Loading stations...</td></tr>
                             )}
-                            {stations.map((s, i) => (
+                            {stations.map((s, i) => {
+                                const chargerGroups = s.chargers || s.connectors || [];
+                                const capacity = chargerGroups.reduce((sum, charger) => sum + Number(charger.count || charger.chargerCount || 1), 0);
+                                return (
                                 <tr key={s._id || i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                     <td className="py-4 pl-4">
                                         <div className="font-bold text-white flex items-center gap-2">
-                                            <span className={`w-2 h-2 rounded-full ${s.connectors?.length > 0 ? 'bg-primary' : 'bg-red-500'}`}></span>
+                                            <span className={`w-2 h-2 rounded-full ${chargerGroups.length > 0 ? 'bg-primary' : 'bg-red-500'}`}></span>
                                             {safeString(s.name)}
                                         </div>
                                         <div className="text-[10px] text-white/40 font-mono mt-1">{safeString(s._id)}</div>
                                     </td>
-                                    <td className="py-4 text-white/60 text-xs max-w-[200px] truncate">{safeString(s.address)}</td>
+                                    <td className="py-4 text-white/60 text-xs max-w-[200px] truncate">{stationAddress(s)}</td>
                                     <td className="py-4">
                                         <div className="text-xs">{s.ownerId?.name || "System Provided"}</div>
                                         <div className="text-[10px] text-white/50">{s.ownerId?.email || "N/A"}</div>
                                     </td>
-                                    <td className="py-4 text-center font-bold text-xl">{s.connectors?.length || 0}</td>
+                                    <td className="py-4 text-center font-bold text-xl">{capacity}</td>
                                     <td className="py-4 text-center font-mono text-xs text-white/50">
                                         {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '-'}
                                     </td>
                                     <td className="py-4 text-center">
-                                        <span className="px-3 py-1 rounded-md text-[10px] font-bold border bg-green-500/20 text-green-400 border-green-500/30 uppercase tracking-widest">Active</span>
+                                        <span className={`px-3 py-1 rounded-md text-[10px] font-bold border uppercase tracking-widest ${s.approvalStatus === 'approved' ? 'bg-green-500/20 text-green-400 border-green-500/30' : s.approvalStatus === 'rejected' ? 'bg-red-500/20 text-red-400 border-red-500/30' : s.approvalStatus === 'flagged' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-white/10 text-white/60 border-white/20'}`}>
+                                            {s.approvalStatus || 'pending'}
+                                        </span>
                                     </td>
                                     <td className="py-4 text-right pr-4">
                                         <div className="flex items-center justify-end gap-2 text-xs">
+                                            {s.approvalStatus !== 'approved' && <button onClick={() => reviewStation(s, 'approved')} className="glass-btn text-primary-light px-3 py-1">Approve</button>}
+                                            {s.approvalStatus !== 'flagged' && <button onClick={() => reviewStation(s, 'flagged')} className="glass-btn text-yellow-400 px-3 py-1">Flag</button>}
+                                            {s.approvalStatus !== 'rejected' && <button onClick={() => reviewStation(s, 'rejected')} className="glass-btn text-red-300 px-3 py-1">Reject</button>}
                                             <Link to={`/admin/stations/${s._id}/edit`} className="glass-btn px-3 py-1">Edit</Link>
                                             <button onClick={() => handleDelete(s._id)} className="glass-btn text-red-400 hover:text-red-500 hover:bg-red-500/10 px-3 py-1">Del</button>
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

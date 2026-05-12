@@ -48,6 +48,16 @@ export default function OwnerStations() {
     }
   };
 
+  const toggleCharger = async (station, chargerIndex, isActive) => {
+    try {
+      const res = await API.put(`/owner/stations/${station._id}/chargers/${chargerIndex}/status`, { isActive });
+      setStations((prev) => prev.map((item) => item._id === station._id ? res.data : item));
+      toast.success(isActive ? 'Charger enabled' : 'Charger disabled');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Charger update failed');
+    }
+  };
+
   const deleteStation = async (stationId) => {
     if (!window.confirm('Delete this station?')) return;
     try {
@@ -84,16 +94,32 @@ export default function OwnerStations() {
           <tbody>
             {stations.map((station) => {
               const capacity = (station.chargers || []).reduce((sum, charger) => sum + Number(charger.count || charger.chargerCount || 1), 0);
+              const approval = station.approvalStatus || 'pending';
               return (
                 <tr key={station._id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                   <td className="py-4 pl-4">
                     <div className="font-bold">{station.name}</div>
                     <div className="text-[10px] text-white/40 font-mono mt-1">{station._id}</div>
+                    <div className={`inline-flex mt-2 px-2 py-0.5 rounded border text-[9px] uppercase font-bold ${approval === 'approved' ? 'bg-primary/10 text-primary-light border-primary/30' : approval === 'rejected' ? 'bg-red-500/10 text-red-400 border-red-500/30' : approval === 'flagged' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' : 'bg-white/5 text-white/50 border-white/10'}`}>
+                      {approval}
+                    </div>
                   </td>
                   <td className="py-4 text-white/60 text-xs max-w-[260px] truncate">{stationAddress(station)}</td>
                   <td className="py-4 text-center">
                     <div className="font-black text-lg">{capacity}</div>
                     <div className="text-[9px] text-white/30 uppercase">{station.chargers?.length || 0} charger groups</div>
+                    <div className="flex justify-center flex-wrap gap-1 mt-2">
+                      {(station.chargers || []).map((charger, index) => (
+                        <button
+                          key={`${station._id}-${index}`}
+                          onClick={() => toggleCharger(station, index, !charger.isActive)}
+                          className={`px-2 py-1 rounded border text-[9px] font-bold ${charger.isActive === false ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-primary/10 text-primary-light border-primary/30'}`}
+                          title={`${charger.type || 'Charger'} ${charger.isActive === false ? 'offline' : 'online'}`}
+                        >
+                          {charger.type || 'AC'} x{charger.count || 1}
+                        </button>
+                      ))}
+                    </div>
                   </td>
                   <td className="py-4 text-center font-bold">{formatCurrency(station.pricePerKwh || station.pricing?.basePrice || 0)}</td>
                   <td className="py-4 text-center">

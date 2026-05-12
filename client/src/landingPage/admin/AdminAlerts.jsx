@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 
 export default function AdminAlerts() {
     const [faults, setFaults] = useState([]);
+    const [emergencies, setEmergencies] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const [notificationMessage, setNotificationMessage] = useState("");
@@ -11,6 +12,14 @@ export default function AdminAlerts() {
 
     useEffect(() => {
         fetchFaults();
+        fetchEmergencies();
+        const socket = API.getSocket?.();
+        const onEmergency = () => {
+            toast.error("New emergency request received.");
+            fetchEmergencies();
+        };
+        socket?.on?.('admin:emergency', onEmergency);
+        return () => socket?.off?.('admin:emergency', onEmergency);
     }, []);
 
     const fetchFaults = async () => {
@@ -23,6 +32,15 @@ export default function AdminAlerts() {
             toast.error("Failed to fetch fault reports.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchEmergencies = async () => {
+        try {
+            const res = await API.get('/admin/emergency');
+            setEmergencies(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.warn("Failed to fetch emergency requests", err);
         }
     };
 
@@ -109,6 +127,45 @@ export default function AdminAlerts() {
                             {isSending ? "Broadcasting..." : "Send to All Users"}
                         </button>
                     </form>
+                </div>
+            </div>
+
+            <div className="glass-panel p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-black">Emergency Charging Monitor</h3>
+                    <button onClick={fetchEmergencies} className="glass-btn px-4 py-2 text-xs">Refresh</button>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="text-white/30 border-b border-white/5 uppercase tracking-widest text-[10px]">
+                                <th className="pb-3 pl-4">User</th>
+                                <th className="pb-3">Station</th>
+                                <th className="pb-3 text-center">Battery</th>
+                                <th className="pb-3 text-center">Priority</th>
+                                <th className="pb-3 text-center">Status</th>
+                                <th className="pb-3 text-right pr-4">Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {emergencies.map((item) => (
+                                <tr key={item._id} className="border-b border-white/5 hover:bg-white/5">
+                                    <td className="py-3 pl-4">
+                                        <div className="font-bold">{item.userId?.name || 'EV User'}</div>
+                                        <div className="text-[10px] text-white/40">{item.userId?.phone || item.userId?.email || '-'}</div>
+                                    </td>
+                                    <td className="py-3 text-white/60">{item.stationId?.name || 'Unassigned'}</td>
+                                    <td className="py-3 text-center font-bold">{item.batteryPercent}%</td>
+                                    <td className="py-3 text-center uppercase text-xs">{item.priority}</td>
+                                    <td className="py-3 text-center uppercase text-xs">{item.status}</td>
+                                    <td className="py-3 text-right pr-4 text-white/40">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
+                                </tr>
+                            ))}
+                            {emergencies.length === 0 && (
+                                <tr><td colSpan="6" className="py-8 text-center text-white/40">No emergency requests.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

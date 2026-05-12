@@ -1,5 +1,5 @@
 // client/src/landingPage/Auth/AuthPage.jsx
-import React, { useState, useRef } from "react";
+import React, { useState, } from "react";
 import API from "../../api";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
@@ -86,7 +86,8 @@ export default function AuthPage() {
       import("../../socket").then(m => m.connectSocket(res.data.token, res.data.user));
 
       const roleFromServer = res?.data?.user?.role;
-      if (roleFromServer === "owner") navigate("/owner/dashboard");
+      if (roleFromServer === "admin") navigate("/admin/dashboard");
+      else if (roleFromServer === "owner") navigate("/owner/dashboard");
       else navigate("/home");
       toast.success("Logged in successfully");
     } catch (err) {
@@ -143,7 +144,7 @@ export default function AuthPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-1.5 ml-1">Phone</label>
-                  <input name="phone" onChange={onChange} className="glass-input w-full" placeholder="9876543210" />
+                  <input name="phone" onChange={onChange} required className="glass-input w-full" placeholder="9876543210" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-1.5 ml-1">Alternate</label>

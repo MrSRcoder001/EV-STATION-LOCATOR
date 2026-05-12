@@ -5,6 +5,7 @@ import { bookingStart, formatCurrency, statusClass } from './ownerUtils';
 
 export default function OwnerOperations() {
   const [bookings, setBookings] = useState([]);
+  const [emergencies, setEmergencies] = useState([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -19,15 +20,33 @@ export default function OwnerOperations() {
     }
   };
 
+  const loadEmergencies = async () => {
+    try {
+      const res = await API.get('/emergency/owner');
+      setEmergencies(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.warn('Failed to load emergency requests', err);
+    }
+  };
+
   useEffect(() => {
     loadBookings();
+    loadEmergencies();
     const socket = API.getSocket?.();
     const onNewBooking = () => {
       toast.success('New booking request received');
       loadBookings();
     };
     socket?.on?.('booking:new', onNewBooking);
-    return () => socket?.off?.('booking:new', onNewBooking);
+    const onEmergency = () => {
+      toast.error('Emergency charging request received');
+      loadEmergencies();
+    };
+    socket?.on?.('emergency:new', onEmergency);
+    return () => {
+      socket?.off?.('booking:new', onNewBooking);
+      socket?.off?.('emergency:new', onEmergency);
+    };
   }, []);
 
   const decide = async (bookingId, action) => {
@@ -39,6 +58,40 @@ export default function OwnerOperations() {
       toast.success(action === 'accept' ? 'Booking accepted' : 'Booking rejected');
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Decision failed');
+    }
+  };
+
+  const checkIn = async (booking) => {
+    const qrCode = window.prompt('Scan / enter QR code', booking.qrCode || '');
+    if (!qrCode) return;
+    try {
+      const res = await API.post('/sessions/check-in', { bookingId: booking._id, qrCode });
+      setBookings((prev) => prev.map((item) => item._id === booking._id ? res.data.booking : item));
+      toast.success('Session started');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Check-in failed');
+    }
+  };
+
+  const completeSession = async (booking) => {
+    const meterEndKwh = Number(window.prompt('Final meter kWh', String(booking.meterCurrentKwh || booking.meterStartKwh || 0)));
+    if (!Number.isFinite(meterEndKwh)) return toast.error('Enter valid kWh');
+    try {
+      const res = await API.put(`/sessions/${booking._id}/complete`, { meterEndKwh });
+      setBookings((prev) => prev.map((item) => item._id === booking._id ? res.data.booking : item));
+      toast.success('Session completed');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Completion failed');
+    }
+  };
+
+  const updateEmergency = async (id, status) => {
+    try {
+      const res = await API.put(`/emergency/${id}/status`, { status });
+      setEmergencies((prev) => prev.map((item) => item._id === id ? res.data : item));
+      toast.success('Emergency status updated');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Emergency update failed');
     }
   };
 
@@ -91,7 +144,7 @@ export default function OwnerOperations() {
                 <th className="pb-4 text-center">Payment</th>
                 <th className="pb-4 text-center">Amount</th>
                 <th className="pb-4 text-center">Status</th>
-                <th className="pb-4 text-right pr-4">Decision</th>
+                <th className="pb-4 text-right pr-4">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +165,8 @@ export default function OwnerOperations() {
                     <div className="flex justify-end gap-2">
                       <button disabled={booking.status !== 'pending'} onClick={() => decide(booking._id, 'accept')} className="glass-btn-primary px-3 py-1.5 text-xs disabled:opacity-30">Accept</button>
                       <button disabled={booking.status !== 'pending'} onClick={() => decide(booking._id, 'reject')} className="glass-btn px-3 py-1.5 text-xs text-red-400 disabled:opacity-30">Reject</button>
+                      <button disabled={booking.status !== 'accepted'} onClick={() => checkIn(booking)} className="glass-btn px-3 py-1.5 text-xs text-blue-300 disabled:opacity-30">Check In</button>
+                      <button disabled={booking.status !== 'active'} onClick={() => completeSession(booking)} className="glass-btn px-3 py-1.5 text-xs text-primary-light disabled:opacity-30">Complete</button>
                     </div>
                   </td>
                 </tr>
@@ -124,6 +179,39 @@ export default function OwnerOperations() {
               )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="glass-panel p-6 rounded-2xl border border-white/10">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-xl font-black">Emergency Charging Requests</h2>
+            <p className="text-xs text-white/40 mt-1">Assigned urgent requests from nearby EV users.</p>
+          </div>
+          <button onClick={loadEmergencies} className="glass-btn px-4 py-2 text-xs">Refresh</button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {emergencies.map((request) => (
+            <div key={request._id} className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <div className="flex justify-between gap-3">
+                <div>
+                  <div className="font-bold">{request.userId?.name || 'EV User'}</div>
+                  <div className="text-[10px] text-white/40">{request.userId?.phone || request.address || '-'}</div>
+                </div>
+                <span className={`h-fit px-2 py-1 rounded border text-[9px] uppercase font-bold ${request.priority === 'critical' ? 'bg-red-500/20 text-red-400 border-red-500/30' : request.priority === 'high' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-white/10 text-white/60 border-white/20'}`}>{request.priority}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
+                <div className="bg-black/20 rounded-lg p-2"><div className="text-white/30 text-[9px] uppercase">Battery</div><div className="font-bold">{request.batteryPercent}%</div></div>
+                <div className="bg-black/20 rounded-lg p-2"><div className="text-white/30 text-[9px] uppercase">Connector</div><div className="font-bold">{request.connectorType}</div></div>
+                <div className="bg-black/20 rounded-lg p-2"><div className="text-white/30 text-[9px] uppercase">Status</div><div className="font-bold capitalize">{request.status}</div></div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => updateEmergency(request._id, 'on_the_way')} className="glass-btn-primary px-3 py-2 text-xs flex-1">On Way</button>
+                <button onClick={() => updateEmergency(request._id, 'resolved')} className="glass-btn px-3 py-2 text-xs flex-1 text-primary-light">Resolved</button>
+              </div>
+            </div>
+          ))}
+          {emergencies.length === 0 && <div className="text-white/40 text-sm">No assigned emergency requests.</div>}
         </div>
       </section>
     </div>

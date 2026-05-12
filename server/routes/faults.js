@@ -11,7 +11,7 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
         const { stationId, description } = req.body;
         const newFault = new FaultReport({
-            userId: req.user.userId,
+            userId: req.user.id,
             stationId,
             description
         });
@@ -76,6 +76,21 @@ router.put('/:id', authMiddleware, async (req, res) => {
         res.json(fault);
     } catch (error) {
         res.status(500).json({ error: 'Server error updating fault' });
+    }
+});
+
+router.put('/:id/resolve', authMiddleware, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+    try {
+        const fault = await FaultReport.findByIdAndUpdate(
+            req.params.id,
+            { status: 'Resolved', adminNotes: req.body.adminNotes || 'Resolved by admin' },
+            { new: true }
+        );
+        if (!fault) return res.status(404).json({ message: 'Fault not found' });
+        res.json(fault);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error resolving fault' });
     }
 });
 

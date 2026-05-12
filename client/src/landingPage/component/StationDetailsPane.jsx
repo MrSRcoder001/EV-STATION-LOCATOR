@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function StationDetailsPane({ station, onClose, onBook }) {
+export default function StationDetailsPane({ station, onClose, onBook, onReportFault, onEmergency }) {
     if (!station) return null;
 
     return (
@@ -19,7 +19,7 @@ export default function StationDetailsPane({ station, onClose, onBook }) {
                 <div className="mb-6">
                     <div className="flex justify-between items-start mb-1">
                         <h2 className="text-xl font-bold leading-tight pr-4">{station.name}</h2>
-                        <div className="text-[10px] bg-primary/20 text-primary-light px-2 py-1 rounded font-bold shrink-0">★ 4.6</div>
+                        <div className="text-[10px] bg-primary/20 text-primary-light px-2 py-1 rounded font-bold shrink-0">★ {station.original?.ratingAverage || 4.6}</div>
                     </div>
                     <div className="text-xs text-white/50 flex flex-col gap-1 mb-3">
                         <div className="flex items-center gap-2">
@@ -110,10 +110,15 @@ export default function StationDetailsPane({ station, onClose, onBook }) {
                     </button>
                 </div>
 
-                <div className="text-center pb-2">
-                    <button onClick={() => onReportFault && onReportFault(station)} className="text-[10px] text-red-500/60 hover:text-red-500 underline uppercase font-bold tracking-widest transition-colors">
-                        ⚠ Report Issue with Station
+                <div className="flex justify-center gap-4 pb-2">
+                    <button onClick={() => onEmergency && onEmergency(station)} className="text-[10px] text-yellow-400/70 hover:text-yellow-400 underline uppercase font-bold tracking-widest transition-colors">
+                        Emergency Charge
                     </button>
+                    {station.source === 'db' && (
+                        <button onClick={() => onReportFault && onReportFault(station)} className="text-[10px] text-red-500/60 hover:text-red-500 underline uppercase font-bold tracking-widest transition-colors">
+                            ⚠ Report Issue with Station
+                        </button>
+                    )}
                 </div>
             </div>
         </div >

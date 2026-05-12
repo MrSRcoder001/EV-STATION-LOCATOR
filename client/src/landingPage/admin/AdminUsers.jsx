@@ -1,23 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../api';
+import toast from 'react-hot-toast';
 
 export default function AdminUsers() {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const fetchUsers = async () => {
+        try {
+            const res = await API.get('/admin/users');
+            setUsers(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error("Failed to fetch users:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const res = await API.get('/admin/users');
-                setUsers(Array.isArray(res.data) ? res.data : []);
-            } catch (err) {
-                console.error("Failed to fetch users:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchUsers();
     }, []);
+
+    const reviewOwner = async (id, status) => {
+        try {
+            const rejectionReason = status === 'rejected' ? window.prompt('Reason for rejection', 'Documents could not be verified') : '';
+            await API.put(`/admin/owners/${id}/verification`, { status, rejectionReason });
+            toast.success(status === 'verified' ? 'Owner verified' : 'Owner rejected');
+            fetchUsers();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Owner review failed');
+        }
+    };
 
     const toggleBlockUser = async (id) => {
         try {
@@ -56,7 +69,7 @@ export default function AdminUsers() {
                                 <th className="pb-4 font-bold">Email Identification</th>
                                 <th className="pb-4 font-bold text-center">Access Role</th>
                                 <th className="pb-4 font-bold text-center">Join Date</th>
-                                <th className="pb-4 font-bold text-center">Vehicles</th>
+                                <th className="pb-4 font-bold text-center">Verification</th>
                                 <th className="pb-4 font-bold text-right pr-4">Actions</th>
                             </tr>
                         </thead>
@@ -93,17 +106,25 @@ export default function AdminUsers() {
                                         {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
                                     </td>
                                     <td className="py-4 text-center font-black text-white/50">
-                                        {u.vehicles?.length || 0}
+                                        {u.role === 'owner' ? (u.ownerVerification?.status || 'not_submitted') : '-'}
                                     </td>
                                     <td className="py-4 text-right pr-4">
-                                        {u.role !== 'admin' && (
-                                            <button
-                                                onClick={() => toggleBlockUser(u._id)}
-                                                className={`text-[10px] px-3 py-1.5 rounded uppercase font-bold tracking-widest border transition-colors ${u.isBlocked ? 'bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/40' : 'bg-white/5 text-white/50 border-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'}`}
-                                            >
-                                                {u.isBlocked ? 'Unblock' : 'Block'}
-                                            </button>
-                                        )}
+                                        <div className="flex justify-end gap-2">
+                                            {u.role === 'owner' && u.ownerVerification?.status !== 'verified' && (
+                                                <button onClick={() => reviewOwner(u._id, 'verified')} className="text-[10px] px-3 py-1.5 rounded uppercase font-bold tracking-widest border bg-primary/10 text-primary-light border-primary/30">Verify</button>
+                                            )}
+                                            {u.role === 'owner' && u.ownerVerification?.status !== 'rejected' && (
+                                                <button onClick={() => reviewOwner(u._id, 'rejected')} className="text-[10px] px-3 py-1.5 rounded uppercase font-bold tracking-widest border bg-yellow-500/10 text-yellow-400 border-yellow-500/30">Reject</button>
+                                            )}
+                                            {u.role !== 'admin' && (
+                                                <button
+                                                    onClick={() => toggleBlockUser(u._id)}
+                                                    className={`text-[10px] px-3 py-1.5 rounded uppercase font-bold tracking-widest border transition-colors ${u.isBlocked ? 'bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/40' : 'bg-white/5 text-white/50 border-white/10 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'}`}
+                                                >
+                                                    {u.isBlocked ? 'Unblock' : 'Block'}
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

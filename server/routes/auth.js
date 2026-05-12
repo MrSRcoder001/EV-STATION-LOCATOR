@@ -83,7 +83,7 @@ router.post(
         alternatePhone,
         passwordHash,
         role: role === 'owner' ? 'owner' : 'user',
-        ownerVerification: role === 'owner' ? { status: 'pending', submittedAt: new Date() } : undefined
+        ownerVerification: role === 'owner' ? { status: 'pending', documents: {}, submittedAt: new Date() } : undefined
       };
 
       // Only add station details if they are provided
@@ -284,13 +284,17 @@ router.put('/update-profile', async (req, res) => {
 
     const userResp = {
       id: user._id,
+      _id: user._id,
       name: user.name,
       email: user.email,
       role: user.role,
       phone: user.phone,
       alternatePhone: user.alternatePhone,
       profileImage: user.profileImage, // return updated image
-      stationName: user.stationName
+      stationName: user.stationName,
+      walletBalance: user.walletBalance,
+      ecoStats: user.ecoStats,
+      ownerVerification: user.ownerVerification
     };
 
     res.json({ user: userResp, message: 'Profile updated successfully' });

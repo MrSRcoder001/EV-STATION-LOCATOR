@@ -531,6 +531,30 @@ export default function Home() {
     openBooking(station);
   };
 
+  const requestEmergencyCharge = async (station) => {
+    const token = localStorage.getItem("token");
+    if (!token) { window.location.href = "/auth"; return; }
+    const note = window.prompt("Emergency note", "Low battery, need urgent charging");
+    const batteryInput = window.prompt("Current battery percentage", String(batteryLevel || 10));
+    const batteryPercent = Number(batteryInput);
+    const location = userLocation || station?.coords;
+    if (!location) return toast.error("Location is required for emergency request");
+
+    try {
+      await API.post("/emergency", {
+        lat: location.lat,
+        lng: location.lng,
+        batteryPercent: Number.isFinite(batteryPercent) ? batteryPercent : 10,
+        connectorType: station?.connectors?.[0] || "Any",
+        address: station?.address || "",
+        note
+      });
+      toast.success("Emergency request sent to nearby station owners");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Emergency request failed");
+    }
+  };
+
   useEffect(() => {
     if (!mapRef.current) return;
     if (directionsResponse) setDirectionsResponse(null);
@@ -678,6 +702,7 @@ export default function Home() {
                   setFaultStation(st);
                   setShowFaultModal(true);
                 }}
+                onEmergency={requestEmergencyCharge}
               />
             )}
           </div>

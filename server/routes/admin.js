@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middlewares/authMiddleware');
+const mongoose = require('mongoose');
 
 const User = require('../models/User');
 const Station = require('../models/Station');
@@ -86,40 +87,51 @@ router.get('/owners/pending', async (req, res) => {
 
 // PUT /api/admin/owners/:id/verification
 router.put('/owners/:id/verification', async (req, res) => {
-    const { status, rejectionReason = '' } = req.body;
-    if (!['verified', 'rejected', 'pending'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid verification status' });
+    try {
+        const { status, rejectionReason = '' } = req.body;
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid owner id' });
+        }
+        if (!['verified', 'rejected', 'pending'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid verification status' });
+        }
+        const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
+        if (!owner) return res.status(404).json({ message: 'Owner not found' });
+        owner.ownerVerification.status = status;
+        owner.ownerVerification.rejectionReason = rejectionReason;
+        owner.ownerVerification.reviewedAt = new Date();
+        owner.ownerVerification.reviewedBy = req.user.id;
+        await owner.save();
+        res.json({ message: `Owner ${status}`, owner });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error verifying owner', error: err.message });
     }
-    const owner = await User.findOne({ _id: req.params.id, role: 'owner' });
-    if (!owner) return res.status(404).json({ message: 'Owner not found' });
-    owner.ownerVerification = {
-        ...(owner.ownerVerification || {}),
-        status,
-        rejectionReason,
-        reviewedAt: new Date(),
-        reviewedBy: req.user.id
-    };
-    await owner.save();
-    res.json({ message: `Owner ${status}`, owner });
 });
 
 // PUT /api/admin/stations/:id/approval
 router.put('/stations/:id/approval', async (req, res) => {
-    const { status, notes = '', fraudRiskScore } = req.body;
-    if (!['pending', 'approved', 'rejected', 'flagged'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid approval status' });
+    try {
+        const { status, notes = '', fraudRiskScore } = req.body;
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid station id' });
+        }
+        if (!['pending', 'approved', 'rejected', 'flagged'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid approval status' });
+        }
+        const station = await Station.findById(req.params.id);
+        if (!station) return res.status(404).json({ message: 'Station not found' });
+        station.approvalStatus = status;
+        station.approvalNotes = notes;
+        station.fraudRiskScore = fraudRiskScore !== undefined ? Number(fraudRiskScore) : station.fraudRiskScore;
+        if (status === 'approved') {
+            station.approvedAt = new Date();
+            station.approvedBy = req.user.id;
+        }
+        await station.save();
+        res.json({ message: `Station ${status}`, station });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error reviewing station', error: err.message });
     }
-    const station = await Station.findById(req.params.id);
-    if (!station) return res.status(404).json({ message: 'Station not found' });
-    station.approvalStatus = status;
-    station.approvalNotes = notes;
-    station.fraudRiskScore = fraudRiskScore !== undefined ? Number(fraudRiskScore) : station.fraudRiskScore;
-    if (status === 'approved') {
-        station.approvedAt = new Date();
-        station.approvedBy = req.user.id;
-    }
-    await station.save();
-    res.json({ message: `Station ${status}`, station });
 });
 
 // GET /api/admin/users

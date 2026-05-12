@@ -50,6 +50,17 @@ export default function AdminDashboard() {
     const headerTitle = "text-sm font-bold text-white mb-4 tracking-wide";
 
     const safeString = (val) => String(val || "-");
+    const stationAddress = (station) => {
+        const address = station?.address;
+        if (!address) return "-";
+        if (typeof address === "string") return address;
+        return [address.fullAddress, address.area, address.city, address.pincode].filter(Boolean).join(", ") || "-";
+    };
+    const chargerCapacity = (station) => (station?.chargers || station?.connectors || [])
+        .reduce((sum, charger) => sum + Number(charger.count || charger.chargerCount || 1), 0);
+    const availableChargers = (station) => (station?.chargers || station?.connectors || [])
+        .filter((charger) => charger.isActive !== false)
+        .reduce((sum, charger) => sum + Number(charger.count || charger.chargerCount || 1), 0);
     const getInitial = (name) => {
         const str = String(name || "U");
         return str.charAt(0).toUpperCase() || "U";
@@ -125,12 +136,12 @@ export default function AdminDashboard() {
                                 {liveStations.slice(0, 10).map((s, i) => (
                                     <tr key={s._id || i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                         <td className="py-3 font-bold flex items-center gap-2">
-                                            <span className={`w-1.5 h-1.5 rounded-full ${s.connectors?.length > 0 ? 'bg-primary' : 'bg-red-500'}`}></span>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${chargerCapacity(s) > 0 ? 'bg-primary' : 'bg-red-500'}`}></span>
                                             {safeString(s.name)}
                                         </td>
-                                        <td className="py-3 text-white/50">{safeString(s.address)}</td>
-                                        <td className="py-3 text-center">{s.connectors?.length || 0}</td>
-                                        <td className="py-3 text-center font-bold text-white">{s.connectors?.length || 0}</td>
+                                        <td className="py-3 text-white/50">{stationAddress(s)}</td>
+                                        <td className="py-3 text-center">{chargerCapacity(s)}</td>
+                                        <td className="py-3 text-center font-bold text-white">{availableChargers(s)}</td>
                                         <td className="py-3 text-center">
                                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${s.status === 'Active' ? 'bg-green-500/20 text-green-400 border-green-500/30' : s.status === 'Maintenance' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' : 'bg-red-500/20 text-red-500 border-red-500/30'}`}>
                                                 {s.status || "Active"}
@@ -286,7 +297,7 @@ export default function AdminDashboard() {
                         </select>
                     </div>
                     <div className="mb-2">
-                        <div className="text-3xl font-black text-white">420</div>
+                        <div className="text-3xl font-black text-white">{stats.totalBookings}</div>
                         <div className="flex justify-between items-end">
                             <span className="text-[10px] text-white/40 font-bold uppercase tracking-widest">Total Sessions</span>
                             <span className="text-[10px] text-primary font-bold">↗ +14%</span>
@@ -310,7 +321,7 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex justify-between items-center bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 text-xs">
                             <span className="font-bold text-white/60">Most Used</span>
-                            <span className="font-bold text-primary-light">EV Hub Pune</span>
+                        <span className="font-bold text-primary-light">{liveStations[0]?.name || 'No station yet'}</span>
                         </div>
                     </div>
                 </div>

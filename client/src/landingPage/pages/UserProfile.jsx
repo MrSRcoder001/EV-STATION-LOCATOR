@@ -17,6 +17,19 @@ export default function UserProfile() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
+  const userId = user.id || user._id;
+
+  const bookingStart = (booking) => booking?.slotId?.start || booking?.meta?.start || booking?.start || booking?.createdAt;
+  const formatBookingDate = (booking) => {
+    const start = bookingStart(booking);
+    if (!start || Number.isNaN(new Date(start).getTime())) return "-";
+    return new Date(start).toLocaleDateString();
+  };
+  const formatBookingTime = (booking) => {
+    const start = bookingStart(booking);
+    if (!start || Number.isNaN(new Date(start).getTime())) return "-";
+    return new Date(start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -34,7 +47,7 @@ export default function UserProfile() {
         API.get("/bookings/me"),
         API.get("/auth/me").then(res => res.data.user).catch(() => JSON.parse(localStorage.getItem("user") || "{}"))
       ]);
-      setBookings(bookingsRes.data);
+      setBookings(Array.isArray(bookingsRes.data) ? bookingsRes.data : []);
       if (userRes && userRes.email) {
         setUser(userRes);
       } else {
@@ -65,11 +78,11 @@ export default function UserProfile() {
         profileImage: user.profileImage
       });
       localStorage.setItem("user", JSON.stringify(res.data.user));
-      setUser(res.data.user);
+      setUser((prev) => ({ ...prev, ...res.data.user }));
       toast.success("Profile updated");
       setEditing(false);
     } catch (err) {
-      toast.error("Update failed");
+      toast.error("Update failed", err.response?.data?.message);
     } finally {
       setSaving(false);
     }
@@ -102,6 +115,33 @@ export default function UserProfile() {
       fetchData();
     } catch (err) {
       toast.error(err.response?.data?.message || "Payment failed");
+    }
+  }
+
+  async function topUpWallet() {
+    const value = window.prompt("Wallet top-up amount", "500");
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid amount");
+    try {
+      await API.post("/wallet/top-up", { amount });
+      toast.success("Wallet topped up");
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Top-up failed");
+    }
+  }
+
+  async function reviewBooking(booking) {
+    const stationId = booking.stationId?._id || booking.stationId;
+    if (!stationId) return toast.error("Station not found for review");
+    const rating = Number(window.prompt("Rating from 1 to 5", "5"));
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) return toast.error("Rating must be 1 to 5");
+    const comment = window.prompt("Review comment", "Good charging experience") || "";
+    try {
+      await API.post(`/stations/${stationId}/reviews`, { bookingId: booking._id, rating, comment });
+      toast.success("Review submitted");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Review failed");
     }
   }
 
@@ -145,7 +185,7 @@ export default function UserProfile() {
   // Socket listener for status updates
   useEffect(() => {
     const socket = API.getSocket();
-    if (!socket || !user.id) return;
+    if (!socket || !userId) return;
 
     const handleUpdate = (data) => {
       // data: { bookingId, status }
@@ -158,7 +198,7 @@ export default function UserProfile() {
 
     socket.on('booking:updated', handleUpdate);
     return () => socket.off('booking:updated', handleUpdate);
-  }, [user.id]);
+  }, [userId]);
 
   return (
     <div className="py-8 px-6 container mx-auto">
@@ -178,11 +218,11 @@ export default function UserProfile() {
 
             {editing ? (
               <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <input name="name" value={user.name} onChange={onChange} placeholder="Full Name" required className="glass-input w-full text-sm" />
-                <input value={user.email} disabled className="glass-input w-full text-sm opacity-50" />
-                <input name="phone" value={user.phone} onChange={onChange} placeholder="Phone Number" className="glass-input w-full text-sm" />
-                <input name="alternatePhone" value={user.alternatePhone} onChange={onChange} placeholder="Alternate Mobile" className="glass-input w-full text-sm" />
-                <input name="profileImage" value={user.profileImage} onChange={onChange} placeholder="Profile Image URL" className="glass-input w-full text-sm" />
+                <input name="name" value={user.name || ""} onChange={onChange} placeholder="Full Name" required className="glass-input w-full text-sm" />
+                <input value={user.email || ""} disabled className="glass-input w-full text-sm opacity-50" />
+                <input name="phone" value={user.phone || ""} onChange={onChange} placeholder="Phone Number" className="glass-input w-full text-sm" />
+                <input name="alternatePhone" value={user.alternatePhone || ""} onChange={onChange} placeholder="Alternate Mobile" className="glass-input w-full text-sm" />
+                <input name="profileImage" value={user.profileImage || ""} onChange={onChange} placeholder="Profile Image URL" className="glass-input w-full text-sm" />
                 <div className="flex gap-2 pt-4">
                   <button className="glass-btn-primary flex-1 py-3 text-xs" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
                   <button type="button" className="glass-btn flex-1 py-3 text-xs" onClick={() => setEditing(false)}>Cancel</button>
@@ -215,6 +255,7 @@ export default function UserProfile() {
                     <span className="text-white/40 font-bold">Wallet Balance</span>
                     <span className="font-mono text-green-400 font-bold">₹ {user.walletBalance || 0}</span>
                   </div>
+                  <button onClick={topUpWallet} className="glass-btn-primary w-full py-2 text-[10px] uppercase tracking-widest">Top Up Wallet</button>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-white/40 font-bold">CO₂ Saved</span>
                     <span className="font-mono text-white font-bold">{(user.ecoStats?.co2Saved || 0).toFixed(1)} kg</span>
@@ -275,8 +316,8 @@ export default function UserProfile() {
                           </div>
                         </td>
                         <td className="py-4 text-center">
-                          <div className="font-mono text-white/80 font-bold">{new Date(b.slotId?.start || b.start).toLocaleDateString()}</div>
-                          <div className="text-[10px] text-white/40 font-mono mt-0.5">{new Date(b.slotId?.start || b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                          <div className="font-mono text-white/80 font-bold">{formatBookingDate(b)}</div>
+                          <div className="text-[10px] text-white/40 font-mono mt-0.5">{formatBookingTime(b)}</div>
                         </td>
                         <td className="py-4 text-right">
                           <span className="font-mono font-black text-lg text-white group-hover:text-primary-light transition-colors drop-shadow-md">₹{b.amount || "—"}</span>
@@ -314,6 +355,13 @@ export default function UserProfile() {
                               onClick={() => completeSession(b)}
                             >
                               Complete
+                            </button>
+                          ) : String(b.status).toLowerCase() === 'completed' ? (
+                            <button
+                              className="text-[10px] font-bold text-yellow-300 hover:text-slate-950 bg-yellow-500/10 hover:bg-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg transition-all uppercase tracking-tighter shadow-md active:scale-95"
+                              onClick={() => reviewBooking(b)}
+                            >
+                              Review
                             </button>
                           ) : (
                             <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">{b.qrCode || "—"}</span>

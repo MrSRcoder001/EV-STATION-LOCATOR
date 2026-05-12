@@ -116,10 +116,10 @@ export default function AdminSessions() {
                                         <div className="text-[10px] text-white/40 font-mono mt-0.5">{b.createdAt ? new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
                                     </td>
                                     <td className="py-4 text-center">
-                                        <span className="text-secondary font-black text-lg">{b.meta?.energy || "15"} <span className="text-[10px] font-bold text-white/50 uppercase">kWh</span></span>
+                                        <span className="text-secondary font-black text-lg">{Number(b.chargedKwh || 0).toFixed(1)} <span className="text-[10px] font-bold text-white/50 uppercase">kWh</span></span>
                                     </td>
                                     <td className="py-4 text-right">
-                                        <span className="font-mono font-bold text-lg text-primary-light">₹{b.meta?.amount || "350"}</span>
+                                        <span className="font-mono font-bold text-lg text-primary-light">₹{b.amount || 0}</span>
                                     </td>
                                     <td className="py-4 text-center pr-4">
                                         {String(b.status).toLowerCase() === 'pending' || String(b.status).toLowerCase() === 'queued' || String(b.status).toLowerCase() === 'active' ? (

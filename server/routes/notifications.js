@@ -64,4 +64,21 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 });
 
+router.post('/broadcast', authMiddleware, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
+    try {
+        const notification = await Notification.create({
+            userId: null,
+            title: req.body.title || 'System Notification',
+            message: req.body.message,
+            type: req.body.type || 'info'
+        });
+        const io = req.app.get('io');
+        if (io) io.emit('notification', notification);
+        res.status(201).json(notification);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error broadcasting notification' });
+    }
+});
+
 module.exports = router;

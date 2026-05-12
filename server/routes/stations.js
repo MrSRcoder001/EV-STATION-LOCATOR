@@ -126,16 +126,27 @@ router.get('/search', async (req, res) => {
     const regex = new RegExp(escapeRegex(search), 'i');
 
     const stations = await Station.find({
-      $or: [
-        { name: regex },
-        { email: regex },
-        { phone: regex },
-        { 'address.fullAddress': regex },
-        { 'address.city': regex },
-        { 'address.area': regex },
-        { 'address.village': regex },
-        { 'address.pincode': regex },
-        { 'chargers.type': regex }
+      $and: [
+        {
+          $or: [
+            { approvalStatus: 'approved' },
+            { approvalStatus: { $exists: false } }
+          ]
+        },
+        { status: { $ne: 'Closed' } },
+        {
+          $or: [
+            { name: regex },
+            { email: regex },
+            { phone: regex },
+            { 'address.fullAddress': regex },
+            { 'address.city': regex },
+            { 'address.area': regex },
+            { 'address.village': regex },
+            { 'address.pincode': regex },
+            { 'chargers.type': regex }
+          ]
+        }
       ]
     }).limit(100).lean();
 
